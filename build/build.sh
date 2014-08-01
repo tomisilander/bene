@@ -18,8 +18,9 @@ ln -s ../src/*.h ../src/*.c .
 $CC $CFLAGS -c -o files.o files.c
 $CC $CFLAGS -c -o varpar.o varpar.c
 $CC $CFLAGS -c -o gopt.o gopt.c
+$CC $CFLAGS -c -o xtab.o xtab.c
 
-$CC $CFLAGS -o $BINDIR/get_local_scores$EXT files.c reg.c ilogi.c ls_XIC.c ls_NML.c ls_BDe.c ls_LOO.c get_local_scores.c gopt.o -lm
+$CC $CFLAGS -o $BINDIR/get_local_scores$EXT files.c reg.c ilogi.c ls_XIC.c ls_NML.c ls_BDe.c ls_LOO.c ls_cNML.c get_local_scores.c gopt.o xtab.o -lm
 $CC $CFLAGS -o $BINDIR/split_local_scores$EXT split_local_scores.c files.o
 $CC $CFLAGS -o $BINDIR/reverse_local_scores$EXT reverse_local_scores.c files.o
 $CC $CFLAGS -o $BINDIR/get_best_parents$EXT get_best_parents.c files.o

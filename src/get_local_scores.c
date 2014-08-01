@@ -13,6 +13,7 @@
 
 #include "ls_XIC.h"
 #include "ls_NML.h"
+#include "ls_cNML.h"
 #include "ls_BDe.h"
 #include "ls_LOO.h"
 #include "get_local_scores.h"
@@ -238,6 +239,7 @@ void create_output_buffer(const char* priorfile)
     int _nof_priors;
     priorf = fopen(priorfile, "rb");
     _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
+    _nof_priors ++; /* to fget rid of compiler warning about unused variable */
   }
 }
 
@@ -271,6 +273,9 @@ void init_scorer(char* essarg) {
   } else if(0==strncmp(essarg, "NML", 3)) {
     scorer = init_NML_scorer();
     free_scorer = free_NML_scorer;
+  } else if(0==strncmp(essarg, "cNML", 4)) {
+    scorer = init_cNML_scorer();
+    free_scorer = free_cNML_scorer;
   } else if((essarg[arglen-1]=='L') || (essarg[arglen-1]=='l')) {
     scorer = init_LOO_scorer(essarg);
     free_scorer = free_LOO_scorer;
@@ -413,7 +418,7 @@ void scores(int len_vs, varset_t vs)
   for(i=0; i<nof_vars; ++i){
     varset_t iset = 1U<<i;
     if (vs & iset) {
-      int nof_freqs = contab2condtab(i, len_vs);
+      int nof_freqs = cnml_scoretable == 0 ? contab2condtab(i, len_vs) : 0;
       vs ^= iset;
       if (nof_parents > max_parents) {
 	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
@@ -429,10 +434,24 @@ void scores(int len_vs, varset_t vs)
 	  memset(buffer, 0, BUFFER_SIZE*sizeof(score_t));
 	} else {
 	  int _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
+         _nof_priors ++; /* to fget rid of compiler warning about unused variable */
 	}
 	buffer_ptr = buffer;
       }
       vs ^= iset;
+    }
+  }
+}
+
+void walk_contabs0(int len_vs, varset_t vs, int nof_calls)
+{
+	cnml_scoretable[vs] = cnml_vs_scorer(0,vs,len_vs);
+
+	if (len_vs > 1){
+	int i;
+	for (i=0; i<nof_calls; ++i) {
+	contab2contab(i, len_vs);
+	walk_contabs0(len_vs-1, vs^(1U<<i), i);
     }
   }
 }
@@ -468,7 +487,7 @@ varset_t task_index2varset(int nof_taskvars, int task_index)
  
 int main(int argc, char* argv[])
 {
-  
+
   void *options= gopt_sort( &argc, (const char**)argv, gopt_start(
       gopt_option('n', GOPT_ARG, gopt_shorts(0),   gopt_longs( "nof-tasks" )),
       gopt_option('i', GOPT_ARG, gopt_shorts(0),   gopt_longs( "task-index" )),
@@ -534,6 +553,7 @@ int main(int argc, char* argv[])
 	  contab2contab(i, len_vs--);
     }
 
+    if(cnml_scoretable != 0) walk_contabs0(len_vs, vs, nof_vars-nof_fixvars);
     walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
 
     free_globals();
