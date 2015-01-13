@@ -8,6 +8,6 @@
 
 typedef unsigned int varset_t;
 
-typedef float score_t;
+typedef double score_t;
 
 #endif

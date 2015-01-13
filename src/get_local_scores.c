@@ -12,7 +12,8 @@
 #include "files.h"
 
 #include "ls_XIC.h"
-#include "ls_NML.h"
+#include "ls_fNML.h"
+#include "ls_qNML.h"
 #include "ls_BDe.h"
 #include "ls_LOO.h"
 #include "get_local_scores.h"
@@ -238,6 +239,7 @@ void create_output_buffer(const char* priorfile)
     int _nof_priors;
     priorf = fopen(priorfile, "rb");
     _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
+    _nof_priors ++; /* to fget rid of compiler warning about unused variable */
   }
 }
 
@@ -262,39 +264,41 @@ score_t get_nof_cfgs(varset_t vs)
   return res;
 }
 
-void init_scorer(char* essarg) {
+void init_scorer(char* essarg, const char* logregfile) {
   int arglen = strlen(essarg); /* how about checking valid length */
   
   if((0==strncmp(essarg, "BIC", 3)) || (0==strncmp(essarg, "AIC", 3)) ) {
     scorer = init_XIC_scorer(essarg);
     free_scorer = free_XIC_scorer;
-  } else if(0==strncmp(essarg, "NML", 3)) {
-    scorer = init_NML_scorer();
-    free_scorer = free_NML_scorer;
+  } else if(0==strncmp(essarg, "fNML", 4)) {
+    scorer = init_fNML_scorer(logregfile);
+    free_scorer = free_fNML_scorer;
+  } else if(0==strncmp(essarg, "qNML", 4)) {
+    scorer = init_qNML_scorer(logregfile);
+    free_scorer = free_qNML_scorer;
   } else if((essarg[arglen-1]=='L') || (essarg[arglen-1]=='l')) {
     scorer = init_LOO_scorer(essarg);
     free_scorer = free_LOO_scorer;
-  } else {
+  } else { /* more checks please */
     scorer = init_BDe_scorer(essarg);
     free_scorer = free_BDe_scorer;
   }
 }
 
 void init_globals(char* vdfile, char* datfile, char* essarg, char* resfile,
-		  const char* cstrfile, const char* priorfile) {
+		  const char* cstrfile, const char* priorfile, const char* logregfile) {
   resultf = (strcmp("-", resfile) == 0) ? stdout : fopen(resfile, "wb");
   create_output_buffer(priorfile);
   init_data_format(vdfile, datfile);
   init_xh();
   init_memory(datfile, essarg);
-  init_scorer(essarg);
+  init_scorer(essarg, logregfile);
   if(cstrfile) get_constraints(cstrfile);
 }
 
 void free_globals(){
   int i;
   
-  free(nof_vals);
   free(freqmem);
 
   for(i=0; i<nof_vars+1; ++i) xdestroy(ctbs[i]);
@@ -313,6 +317,8 @@ void free_globals(){
   flush_n_free_output_buffer();
   if(resultf != stdout) fclose(resultf);
   if(priorf != NULL) fclose(priorf);
+
+  free(nof_vals);
 
 }
 
@@ -413,7 +419,7 @@ void scores(int len_vs, varset_t vs)
   for(i=0; i<nof_vars; ++i){
     varset_t iset = 1U<<i;
     if (vs & iset) {
-      int nof_freqs = contab2condtab(i, len_vs);
+      int nof_freqs = qnml_scoretable == 0 ? contab2condtab(i, len_vs) : 0;
       vs ^= iset;
       if (nof_parents > max_parents) {
 	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
@@ -429,10 +435,24 @@ void scores(int len_vs, varset_t vs)
 	  memset(buffer, 0, BUFFER_SIZE*sizeof(score_t));
 	} else {
 	  int _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
+         _nof_priors ++; /* to fget rid of compiler warning about unused variable */
 	}
 	buffer_ptr = buffer;
       }
       vs ^= iset;
+    }
+  }
+}
+
+void walk_contabs0(int len_vs, varset_t vs, int nof_calls)
+{
+	qnml_scoretable[vs] = qnml_vs_scorer(0,vs,len_vs);
+
+	if (len_vs > 1){
+	int i;
+	for (i=0; i<nof_calls; ++i) {
+	contab2contab(i, len_vs);
+	walk_contabs0(len_vs-1, vs^(1U<<i), i);
     }
   }
 }
@@ -468,8 +488,9 @@ varset_t task_index2varset(int nof_taskvars, int task_index)
  
 int main(int argc, char* argv[])
 {
-  
+
   void *options= gopt_sort( &argc, (const char**)argv, gopt_start(
+      gopt_option('l', GOPT_ARG, gopt_shorts('l'), gopt_longs( "logregfile" )),
       gopt_option('n', GOPT_ARG, gopt_shorts(0),   gopt_longs( "nof-tasks" )),
       gopt_option('i', GOPT_ARG, gopt_shorts(0),   gopt_longs( "task-index" )),
       gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs( "constraints" )),
@@ -480,7 +501,8 @@ int main(int argc, char* argv[])
   if (argc != 5){
     fprintf(stderr, 
 	    "Usage: get_local_scores vdfile datfile "
-	    "(ess[l|L|r|R] | AIC | BIC | NML) resfile \n" 
+	    "(ess[l|L|r|R] | AIC | BIC | fNML | qNML) resfile \n" 
+            " -l --logregfile file : needed for fNML and qNML\n"
 	    " --nof-tasks n\n"
             " --task-index i\n"
             " -c --constraints cstrfile\n"
@@ -496,14 +518,16 @@ int main(int argc, char* argv[])
     int task_index  = 0;
     int nof_fixvars = 0;
     int len_vs;
-    const char* cstrfile = 0;
-    const char* priorfile = NULL;
+    const char* cstrfile   = NULL;
+    const char* priorfile  = NULL;
+    const char* logregfile = NULL;
     varset_t vs;
     
     if (gopt_arg(options, 'n', &nof_tasks_s))  nof_tasks  = atoi(nof_tasks_s);
     if (gopt_arg(options, 'i', &task_index_s)) task_index = atoi(task_index_s);
     if (gopt_arg(options, 'c', &cstrfile)){} ; /* could check file etc. */
     if (gopt_arg(options, 'p', &priorfile)){} ; /* could check file etc. */
+    if (gopt_arg(options, 'l', &logregfile)){} ; /* could check file etc. */
     if (gopt_arg(options, 'm', &max_parents_s)) max_parents = atoi(max_parents_s);
     
     if (task_index >= nof_tasks) {
@@ -519,7 +543,7 @@ int main(int argc, char* argv[])
       return 3;
     }
     
-    init_globals(argv[1], argv[2], argv[3], argv[argc-1], cstrfile, priorfile);
+    init_globals(argv[1], argv[2], argv[3], argv[argc-1], cstrfile, priorfile, logregfile);
     vs = task_index2varset(nof_vars - nof_fixvars, task_index);
 
     {
@@ -534,6 +558,7 @@ int main(int argc, char* argv[])
 	  contab2contab(i, len_vs--);
     }
 
+    if(qnml_scoretable != 0) walk_contabs0(len_vs, vs, nof_vars-nof_fixvars);
     walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
 
     free_globals();

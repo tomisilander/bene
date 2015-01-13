@@ -6,7 +6,7 @@
 
 /* NML = log(ML) - SUM_D log(ML(D)) */
 
-extern scorefun init_NML_scorer();
-extern void free_NML_scorer();
+extern scorefun init_fNML_scorer();
+extern void free_fNML_scorer();
 
 #endif

@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
 {
 
   if (argc!=3) {
-    fprintf(stderr, "Usage: score_nets netfiles dirname\n");
+    fprintf(stderr, "Usage: score_netsets netfiles dirname\n");
     return 1;
   }
 
