@@ -15,7 +15,7 @@ rdir=$1;      shift
 mkdir -p $rdir
 nof_vars=`cat $vdfile | wc -l`
 
-logregfile=$bin/logreg256x2000.bin
+logregfile=$binpath/logreg256x2000.bin
 $binpath/get_local_scores $vdfile $datafile $score ${rdir}/res -l $logregfile $@
 $binpath/split_local_scores   $nof_vars ${rdir}
 $binpath/reverse_local_scores $nof_vars ${rdir}
