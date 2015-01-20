@@ -35,5 +35,6 @@ $CC $CFLAGS -o $BINDIR/net2parents$EXT net2parents.c
 $CC $CFLAGS -o $BINDIR/parents2arcs$EXT parents2arcs.c
 $CC $CFLAGS -o $BINDIR/arcs2dot$EXT arcs2dot.c
 $CC $CFLAGS -o $BINDIR/ban_arc$EXT ban_arc.c files.o
-$CC $CFLAGS -o $BINDIR/force_arc$EXT force_arc.c files.o
+$CC $CFLAGS -o $BINDIR/dump_scorefile$EXT dump_scorefile.c
 $CC $CFLAGS -o $BINDIR/gen_prior_file$EXT gen_prior_file.c gopt.o -lm
+$CC $CFLAGS -o $BINDIR/force_arc$EXT force_arc.c files.o
