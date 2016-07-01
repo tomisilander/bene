@@ -13,6 +13,8 @@ fi
 CFLAGS="-Wall  -O3"
 
 BINDIR=../bin
+mkdir -p $BINDIR
+
 ln -fs ../src/*.h ../src/*.c .
 
 $CC $CFLAGS -c -o files.o files.c

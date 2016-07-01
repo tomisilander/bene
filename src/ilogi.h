@@ -3,6 +3,7 @@
 #include "cfg.h"
 
 extern score_t* ilogi;
+extern int len_ilogi;
 extern int ensure_ilogi(int maxi);
 extern void free_ilogi();
 

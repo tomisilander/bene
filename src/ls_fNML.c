@@ -11,31 +11,6 @@ extern int      N;
 
 /* NML = log(ML) - log(REGRET) */
 
-score_t big_fnml_score(int i, varset_t psi, int nof_freqs){
-
-  int vc_v = nof_vals[i];
-  int* freqp = freqmem;
-  int* end_freqp = freqp + nof_freqs * vc_v;
-
-  score_t res = 0.0;
-
-  for(;freqp < end_freqp; freqp += vc_v) {
-    int  pcfreq = 0;
-    int v;
-    for(v = 0; v<vc_v; ++v) {
-      int freq = freqp[v];
-      if (freq) {
-	pcfreq += freq;
-	res += (freq < BIG_NML_DATA) ? ilogi[freq] : freq * log(freq);
-      }
-    }
-    res -= (pcfreq < BIG_NML_DATA) ? ilogi[pcfreq] : pcfreq * log(pcfreq);
-    res -= logreg(pcfreq, vc_v); /* regret */
-  }
-
-  return res;
-}
-
 score_t fnml_score(int i, varset_t psi, int nof_freqs){
 
   int vc_v = nof_vals[i];
@@ -51,26 +26,20 @@ score_t fnml_score(int i, varset_t psi, int nof_freqs){
       int freq = freqp[v];
       if (freq) {
 	pcfreq += freq;
-	res += ilogi[freq];
+	res += (freq < len_ilogi) ? ilogi[freq] : freq * log(freq);
       }
     }
-    res -= ilogi[pcfreq];
+    res -= (pcfreq < len_ilogi) ? ilogi[pcfreq] : pcfreq * log(pcfreq);
     res -= logreg(pcfreq, vc_v); /* regret */
   }
 
   return res;
 }
 
-
 scorefun init_fNML_scorer(const char* logregfile){
   init_logreg(logregfile, nof_vars, nof_vals);
-  if (N<BIG_NML_DATA){
-    ensure_ilogi(N);
-    return fnml_score;
-  } else {
-    ensure_ilogi(BIG_NML_DATA);
-    return big_fnml_score;
-  }
+  ensure_ilogi(MIN(N,BIG_NML_DATA));
+  return fnml_score;
 }
 
 void free_fNML_scorer(){
