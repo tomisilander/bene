@@ -16,6 +16,7 @@ int     nof_freq2s;
 
 static int is_BDeu = 1;
 static int is_Cow  = 0;
+static int is_BDs  = 0;
 
 #define BIG_BDE_DATA (1<<10)
 
@@ -29,7 +30,7 @@ score_t bde_score(int i, varset_t psi, int nof_freqs){
 
   int vc_v = nof_vals[i];
   score_t pcc =  get_nof_cfgs(psi);
-  score_t ess_per_cc  = is_BDeu ? ess/(pcc*vc_v) : ess;
+  score_t ess_per_cc  = is_BDeu ? ess/((is_BDs ? nof_freqs : pcc)*vc_v) : ess;
   score_t ess_per_pcc = ess_per_cc * vc_v;
   score_t xpenalty = is_Cow ? log(pcc*vc_v) : 0.0;
 
@@ -37,7 +38,7 @@ score_t bde_score(int i, varset_t psi, int nof_freqs){
   int* end_freqp = freqp + nof_freqs * vc_v;
 
   score_t res = nof_freqs * lgamma(ess_per_pcc);
-  int nof_zeros = 0;
+  int nof_non_zeros = 0;
     
   memset(freq2mem,  0, nof_freq2s*sizeof(int)); /* could reset later */
   memset(freq2mem2, 0, nof_freq2s*sizeof(int)); /* could reset later */
@@ -49,13 +50,12 @@ score_t bde_score(int i, varset_t psi, int nof_freqs){
       int freq = freqp[v];
       if (freq) {
 	pcfreq += freq;
+	++ nof_non_zeros;
 	if(data_not_big || freq<nof_freq2s){
 	  ++freq2mem[freq];
 	} else {
 	  res += lgamma(ess_per_cc + freq);
 	}
-      } else {
-	++ nof_zeros;
       }
     }
     if(data_not_big || pcfreq<nof_freq2s){
@@ -65,7 +65,7 @@ score_t bde_score(int i, varset_t psi, int nof_freqs){
     }
   }
 
-  res += (nof_zeros - nof_freqs * vc_v) * lgamma(ess_per_cc);
+  res -= nof_non_zeros * lgamma(ess_per_cc);
 
   {
     int i;
@@ -92,17 +92,15 @@ scorefun init_BDe_scorer(char* arg){
 
   if (scoretype == 'R' || scoretype == 'r') {
     is_BDeu = 0;
-  } else if (scoretype == 'c' || scoretype == 'C') {
+  } else if (scoretype == 'c' || scoretype == 'C') { 
     is_Cow = 1;
+  } else if (scoretype == 's' || scoretype == 'S') {     
+    is_BDs = 1;
   }
 
   ess = atof(arg);
   data_not_big = N<BIG_BDE_DATA; 
-  if (data_not_big){
-    nof_freq2s = N+1;
-  } else {
-    nof_freq2s = BIG_BDE_DATA;
-  }
+  nof_freq2s = MIN(N+1,BIG_BDE_DATA);
 
   freq2mem  = malloc(nof_freq2s * sizeof(int));
   freq2mem2 = malloc(nof_freq2s * sizeof(int));
