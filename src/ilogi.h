@@ -7,6 +7,6 @@ extern int len_ilogi;
 extern int ensure_ilogi(int maxi);
 extern void free_ilogi();
 
-#define MIN(X,Y) (X) ? ((X)<(Y)) : (Y)
+#define MIN(X,Y) ((X)<(Y)) ? (X) : (Y)
 
 #endif

@@ -49,6 +49,8 @@ scorefree free_scorer;
 /* Prior */
 
 FILE* priorf = NULL;
+#define LOG2 (0.69314718055994530941)
+int use_MU = 0;
 
 /* maximum numbero of parents */
 
@@ -236,10 +238,14 @@ void create_output_buffer(const char* priorfile)
   buffer_end = buffer + BUFFER_SIZE;
   buffer_ptr = buffer;
   if(priorfile != NULL) {
-    int _nof_priors;
-    priorf = fopen(priorfile, "rb");
-    _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
-    _nof_priors ++; /* to fget rid of compiler warning about unused variable */
+    if (strcmp(priorfile,"@MU") == 0){
+        use_MU = 1;
+    } else {
+      int _nof_priors;
+      priorf = fopen(priorfile, "rb");
+      _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
+      _nof_priors ++; /* to fget rid of compiler warning  */
+    }
   }
 }
 
@@ -427,7 +433,7 @@ void scores(int len_vs, varset_t vs)
 	  (((musts[i] & vs) != musts[i]) || ((nopes[i] & vs) != 0))) { 
 	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
       } else {
-	*buffer_ptr++ += scorer(i, vs, nof_freqs);
+	*buffer_ptr++ += scorer(i, vs, nof_freqs) - use_MU*LOG2*nof_parents;
       }
       if (buffer_ptr == buffer_end){
 	fwrite(buffer, sizeof(score_t), BUFFER_SIZE, resultf);
