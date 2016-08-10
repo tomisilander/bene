@@ -10,10 +10,15 @@ static float hlogpi = 0.0;
 static float r1_s2  = 0.0;
 static float** logregtab = NULL;
 
-void init_logreg(const char* logregfile, int nof_vars, int* nof_vals){
+void init_globconsts() {
   hlogpi = 5*log(pi);
   r1_s2  = 1/sqrt(2);
+}
+
+void init_logreg(const char* logregfile, int nof_vars, int* nof_vals){
   
+  init_globconsts();
+
   logregtab = (float**) calloc(256, sizeof(float*));
   {
     int i;
@@ -30,6 +35,26 @@ void init_logreg(const char* logregfile, int nof_vars, int* nof_vals){
     fclose(logregf);
   }
 }
+
+void init_logregN(const char* logregfile){
+  
+  init_globconsts();
+
+  logregtab = (float**) calloc(256, sizeof(float*));
+  {
+    int vci;
+    FILE* logregf = fopen(logregfile, "rb");
+
+    for (vci=1;vci<=256;++vci) { 
+      if (logregtab[vci-1]==NULL) {
+	logregtab[vci-1] = (float*) malloc(2001 * sizeof(float));
+	FREAD(logregtab[vci-1], sizeof(float), 2001, logregf);
+      }
+    }
+    fclose(logregf);
+  }
+}
+
 
 void free_logreg(int nof_vars, int* nof_vals){
   int i;

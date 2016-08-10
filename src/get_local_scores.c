@@ -425,7 +425,7 @@ void scores(int len_vs, varset_t vs)
   for(i=0; i<nof_vars; ++i){
     varset_t iset = 1U<<i;
     if (vs & iset) {
-      int nof_freqs = qnml_scoretable == 0 ? contab2condtab(i, len_vs) : 0;
+      int nof_freqs = contab2condtab(i, len_vs);
       vs ^= iset;
       if (nof_parents > max_parents) {
 	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
@@ -450,6 +450,7 @@ void scores(int len_vs, varset_t vs)
   }
 }
 
+#if 0
 void walk_contabs0(int len_vs, varset_t vs, int nof_calls)
 {
 	qnml_scoretable[vs] = qnml_vs_scorer(0,vs,len_vs);
@@ -462,6 +463,7 @@ void walk_contabs0(int len_vs, varset_t vs, int nof_calls)
     }
   }
 }
+#endif
 
 void walk_contabs(int len_vs, varset_t vs, int nof_calls)
 {
@@ -564,7 +566,10 @@ int main(int argc, char* argv[])
 	  contab2contab(i, len_vs--);
     }
 
+#if 0
     if(qnml_scoretable != 0) walk_contabs0(len_vs, vs, nof_vars-nof_fixvars);
+#endif
+
     walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
 
     free_globals();
