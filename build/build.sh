@@ -9,9 +9,9 @@ fi
 
 
 #CFLAGS="-Wextra -g -ansi -pedantic"
-CFLAGS="-Wextra -g -ansi"
+#CFLAGS="-Wextra -g -ansi"
 # CFLAGS="-Wall -O3 -g -pg"
-# CFLAGS="-Wall  -O3"
+CFLAGS="-Wall  -O3"
 
 BINDIR=../bin
 mkdir -p $BINDIR
