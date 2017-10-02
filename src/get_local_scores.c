@@ -15,6 +15,7 @@
 #include "ls_fNML.h"
 #include "ls_qNML.h"
 #include "ls_BDe.h"
+#include "ls_BDq.h"
 #include "ls_LOO.h"
 #include "get_local_scores.h"
 
@@ -285,6 +286,9 @@ void init_scorer(char* essarg, const char* logregfile) {
   } else if((essarg[arglen-1]=='L') || (essarg[arglen-1]=='l')) {
     scorer = init_LOO_scorer(essarg);
     free_scorer = free_LOO_scorer;
+  } else if((essarg[arglen-1]=='Q') || (essarg[arglen-1]=='q')) {
+    scorer = init_BDq_scorer(essarg);
+    free_scorer = free_BDq_scorer;
   } else { /* more checks please */
     scorer = init_BDe_scorer(essarg);
     free_scorer = free_BDe_scorer;
@@ -509,7 +513,7 @@ int main(int argc, char* argv[])
   if (argc != 5){
     fprintf(stderr, 
 	    "Usage: get_local_scores vdfile datfile "
-	    "(ess[l|L|r|R] | AIC | BIC | fNML | qNML) resfile \n" 
+	    "(ess[l|L|r|R|q|Q|S|s] | AIC | BIC | fNML | qNML) resfile \n" 
             " -l --logregfile file : needed for fNML and qNML\n"
 	    " --nof-tasks n\n"
             " --task-index i\n"

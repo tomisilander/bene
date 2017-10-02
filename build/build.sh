@@ -23,7 +23,7 @@ $CC $CFLAGS -c -o varpar.o varpar.c
 $CC $CFLAGS -c -o gopt.o gopt.c
 $CC $CFLAGS -c -o xtab.o xtab.c
 
-$CC $CFLAGS -o $BINDIR/get_local_scores$EXT files.c reg.c ilogi.c ls_XIC.c ls_fNML.c ls_BDe.c ls_LOO.c ls_qNML.c get_local_scores.c gopt.o xtab.o -lm
+$CC $CFLAGS -o $BINDIR/get_local_scores$EXT files.c reg.c ilogi.c ls_XIC.c ls_fNML.c ls_BDe.c ls_LOO.c ls_qNML.c ls_BDq.c get_local_scores.c gopt.o xtab.o -lm
 $CC $CFLAGS -o $BINDIR/split_local_scores$EXT split_local_scores.c files.o
 $CC $CFLAGS -o $BINDIR/reverse_local_scores$EXT reverse_local_scores.c files.o
 $CC $CFLAGS -o $BINDIR/zeta_local_scores$EXT zeta_local_scores.c files.o -lm

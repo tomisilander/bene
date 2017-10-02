@@ -10,9 +10,9 @@ extern int      N;
 
 score_t ess;
 
-int*    freq2mem  = NULL;
-int*    freq2mem2 = NULL;
-int     nof_freq2s;
+static int*    freq2mem  = NULL;
+static int*    freq2mem2 = NULL;
+static int     nof_freq2s;
 
 static int is_BDeu = 1;
 static int is_Cow  = 0;

@@ -10,7 +10,7 @@ fi
 
 score=`$d/../bin/data2net.sh $d/iris.vd $d/iris.idt $ess $d/resdir`
 echo Score : $score
-echo Acs : 
+echo Arcs : 
 $d/../bin/net2parents $d/resdir/net - | $d/../bin/parents2arcs - -
 
 if which dot > /dev/null; then
