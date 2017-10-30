@@ -61,7 +61,7 @@ score_t bdq_score(int i, varset_t psi, int nof_freqs){
     }
   }
 
-  freq2mem2[0] += pcc*(vc_v-1); /* nof lgamma(ess) to be substracted */
+  freq2mem2[0] += nof_freqs*(vc_v-1); /* nof lgamma(ess) to be substracted */
 
   {
     int i;
