@@ -2,7 +2,7 @@
 
 This package contains software for constructing  the globally optimal
 Bayesian network structure using decomposable scores AIC, BIC, BDe,
-fNML, and LOO. 
+fNML, qNML and LOO. 
 
 ## Requirements
 
