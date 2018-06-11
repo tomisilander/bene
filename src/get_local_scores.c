@@ -26,7 +26,9 @@
 
 int  N;
 int  nof_vars;
+int  nof_cols;
 int* nof_vals;
+int* sel_vars;
 
 /* Hashing and working memory */
 
@@ -53,7 +55,7 @@ FILE* priorf = NULL;
 #define LOG2 (0.69314718055994530941)
 int use_MU = 0;
 
-/* maximum numbero of parents */
+/* maximum number of parents */
 
 int max_parents = 1024;
 
@@ -68,29 +70,47 @@ score_t* buffer_ptr;
 
 /***** Initialising globals *****/
 
-void init_data_format(char* vdfile, char* datfile) {
-  nof_vars = nof_lines(vdfile);
+void init_data_format(const char* vdfile, const char* datfile, const char* selfile) {
+  nof_cols = nof_lines(vdfile);
+  nof_vars = (selfile == NULL) ? nof_cols : nof_lines(selfile);
   N        = nof_lines(datfile);
   nof_vals = (int*) calloc(nof_vars, sizeof(int));    
-  {
-    FILE* vdf = fopen(vdfile,"r");
-    int i = -1;
-    int c = 0;
-    int prev = '\n';
-    int count = 0;
-    while(EOF != (c=fgetc(vdf))){
-      if ((prev=='\n') || (prev=='\r' && c!='\n')) {
-	/* new line started */
-	if(i >= 0) {
-	  nof_vals[i] = count;
-	  count = 0;
-	}
-	++i;
+  sel_vars = (int*) calloc(nof_vars, sizeof(int));
+
+  /* List selected variables */
+  if (selfile == NULL){
+    int i; for (i=0; i<nof_vars; ++i) sel_vars[i]=i;
+  } else {
+    FILE* self;
+    int i = 0;
+
+    if ((self = fopen(selfile,"r"))==NULL){
+      fprintf(stderr,"Cannot open selectfile %s\n",selfile);
+      exit(1);
+    }
+
+    for (i=0; i<nof_vars; ++i) 
+      if (1 != fscanf(self, "%d", sel_vars+i)) {
+	fprintf(stderr, "Reading selected variable number %d failed\n", i);
+	exit(1);
       }
-      count += (c=='\t');
+  }
+
+  { /* Count values of selected variables */
+    FILE* vdf = fopen(vdfile,"r");
+    int i = 0; /* line number in vdfile */
+    int j = 0; /* index of selected variable */
+    int c = 0;
+    int prev = 'X';
+    while(EOF != (c=fgetc(vdf))){
+      if ((c=='\r') || (c=='\n' && prev!='\r')) {
+	/* line ended (but \n after \r may remain) */
+	j += (sel_vars[j] == i++); 
+      } else if (c != '\n') {
+      	nof_vals[j] += (c=='\t');
+      }
       prev = c;
     }
-    if(i >= 0) nof_vals[i] = count;
     fclose(vdf);
   }
 }
@@ -108,20 +128,23 @@ void init_xh(){
   }
 }
 
-xtab* dat2ctb(char* datfile) {
+xtab* dat2ctb(const char* datfile) {
   xtab* ctb = xcreate(RANGE, N);
   FILE* datf = fopen(datfile,"r");
   uchar index[MAX_NOF_VARS];
-  int i  = 0;
+  int i  = 0; /* column index */
+  int j  = 0; /* variable index */
   uint h = 0;
   int v  = 0;
 
   while(1 == fscanf(datf, "%d", &v)){
-    
-    h ^= xh[i][v];
-    index[i++] = v;
+    i %= nof_cols;
+    if (i++ != sel_vars[j]) continue;
 
-    if (i == nof_vars){
+    h ^= xh[j][v];
+    index[j++] = v;
+
+    if (j == nof_vars){
       int new = 0;
       xentry* x = xadd(ctb, h, index, nof_vars, &new);
       if(new) {
@@ -129,7 +152,7 @@ xtab* dat2ctb(char* datfile) {
 	x->val = calloc(1, sizeof(int));
       } 
       ++ *x->val;
-      h = i = 0;
+      h = j = 0;
     }
   }
   fclose(datf);
@@ -182,7 +205,7 @@ void get_ctbs(int nof_keys){
       ctbs[i] = xcreate(RANGE, nof_keys);
 }
 
-void init_memory(char* datfile, char* essarg){
+void init_memory(const char* datfile, char* essarg){
   xtab* ctb0       = dat2ctb(datfile);
   int max_nof_keys = xcount(ctb0);
 
@@ -295,11 +318,12 @@ void init_scorer(char* essarg, const char* logregfile) {
   }
 }
 
-void init_globals(char* vdfile, char* datfile, char* essarg, char* resfile,
-		  const char* cstrfile, const char* priorfile, const char* logregfile) {
+void init_globals(const char* vdfile, const char* datfile, char* essarg, const char* resfile,
+		  const char* cstrfile, const char* priorfile, 
+                  const char* logregfile, const char* selfile) {
   resultf = (strcmp("-", resfile) == 0) ? stdout : fopen(resfile, "wb");
   create_output_buffer(priorfile);
-  init_data_format(vdfile, datfile);
+  init_data_format(vdfile, datfile, selfile);
   init_xh();
   init_memory(datfile, essarg);
   init_scorer(essarg, logregfile);
@@ -329,6 +353,7 @@ void free_globals(){
   if(priorf != NULL) fclose(priorf);
 
   free(nof_vals);
+  free(sel_vars);
 
 }
 
@@ -507,6 +532,7 @@ int main(int argc, char* argv[])
       gopt_option('i', GOPT_ARG, gopt_shorts(0),   gopt_longs( "task-index" )),
       gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs( "constraints" )),
       gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs( "prior" )),
+      gopt_option('s', GOPT_ARG, gopt_shorts('s'), gopt_longs( "selectvars" )),
       gopt_option('m', GOPT_ARG, gopt_shorts('m'), gopt_longs( "max-parents" ))
 						    )
 			    );
@@ -520,6 +546,7 @@ int main(int argc, char* argv[])
             " -c --constraints cstrfile\n"
             " -p --prior priorfile\n"
 	    " -m --max-parents\n"
+	    " -s --selectvars selfile\n"
 );
     return 1;
   } else {
@@ -533,6 +560,7 @@ int main(int argc, char* argv[])
     const char* cstrfile   = NULL;
     const char* priorfile  = NULL;
     const char* logregfile = NULL;
+    const char* selfile = NULL;
     varset_t vs;
     
     if (gopt_arg(options, 'n', &nof_tasks_s))  nof_tasks  = atoi(nof_tasks_s);
@@ -540,6 +568,7 @@ int main(int argc, char* argv[])
     if (gopt_arg(options, 'c', &cstrfile)){} ; /* could check file etc. */
     if (gopt_arg(options, 'p', &priorfile)){} ; /* could check file etc. */
     if (gopt_arg(options, 'l', &logregfile)){} ; /* could check file etc. */
+    if (gopt_arg(options, 's', &selfile)){} ; /* could check file */
     if (gopt_arg(options, 'm', &max_parents_s)) max_parents = atoi(max_parents_s);
     
     if (task_index >= nof_tasks) {
@@ -555,7 +584,7 @@ int main(int argc, char* argv[])
       return 3;
     }
     
-    init_globals(argv[1], argv[2], argv[3], argv[argc-1], cstrfile, priorfile, logregfile);
+    init_globals(argv[1], argv[2], argv[3], argv[argc-1], cstrfile, priorfile, logregfile, selfile);
     vs = task_index2varset(nof_vars - nof_fixvars, task_index);
 
     {

@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-int    nof_lines(char* filename);
+int    nof_lines(const char* filename);
 char*  create_fn(char* dirname, int i, char* ext);
 FILE*  open_file(char* dirname, int i, char* ext, char* mode);
 FILE** open_files(int nof_vars, char* dirname, char* ext, char* mode);

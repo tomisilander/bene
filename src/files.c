@@ -14,7 +14,7 @@ int nof_digits(int n)
   return c;
 }
 
-int nof_lines(char* filename) {
+int nof_lines(const char* filename) {
   int nof_lines = 0;
   int c = 0;
   int prev = '\n';
