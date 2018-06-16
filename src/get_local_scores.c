@@ -94,6 +94,7 @@ void init_data_format(const char* vdfile, const char* datfile, const char* selfi
 	fprintf(stderr, "Reading selected variable number %d failed\n", i);
 	exit(1);
       }
+    fclose(self);
   }
 
   { /* Count values of selected variables */
@@ -102,11 +103,11 @@ void init_data_format(const char* vdfile, const char* datfile, const char* selfi
     int j = 0; /* index of selected variable */
     int c = 0;
     int prev = 'X';
-    while(EOF != (c=fgetc(vdf))){
+    while((EOF != (c=fgetc(vdf))) && (j<nof_vars)){
       if ((c=='\r') || (c=='\n' && prev!='\r')) {
 	/* line ended (but \n after \r may remain) */
 	j += (sel_vars[j] == i++); 
-      } else if (c != '\n') {
+      } else if ((sel_vars[j] == i) && (c != '\n') ){
       	nof_vals[j] += (c=='\t');
       }
       prev = c;
