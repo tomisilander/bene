@@ -10,17 +10,19 @@ fi
 zeta=0
 selfile=""
 while getopts "zs:" opt; do
-	case $opt in
-		z)
-			zeta=1
-			shift
-			;;
-		s)
-			selfile=$OPTARG
-			selarg="-s $selfile"
-			shift 2
-			;;
-	esac
+    case $opt in
+	z)
+	    zeta=1
+	    shift
+	    let OPTIND-=1
+	    ;;
+	s)
+	    selfile=$OPTARG
+	    selarg="-s $selfile"
+	    shift 2
+	    let OPTIND-=2
+	    ;;
+    esac
 done
 
 vdfile=$1;    shift
@@ -34,6 +36,7 @@ if [ -f "$selfile" ]; then
 else
 	nof_vars=`cat $vdfile | wc -l`
 fi
+
 
 logregfile=$binpath/logreg256x2000.bin
 $binpath/get_local_scores $vdfile $datafile $score ${rdir}/res -l $logregfile $@ $selarg
