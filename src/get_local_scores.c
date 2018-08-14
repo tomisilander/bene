@@ -66,7 +66,7 @@ FILE* resultf;
 score_t* buffer;
 score_t* buffer_end;
 score_t* buffer_ptr;
-
+int save_all_scores = 1; /* otherwise do not save if over max_parents */
 
 /***** Initialising globals *****/
 
@@ -288,7 +288,7 @@ score_t get_nof_cfgs(varset_t vs)
   score_t res = 1;
   int i;
   for(i=0; i<nof_vars; ++i) {
-    if(vs & (1U<<i)) {
+    if(vs & SINGLETON(i)) {
       res *= nof_vals[i];
     }
   }
@@ -452,10 +452,13 @@ void scores(int len_vs, varset_t vs)
 {
   int i;
   int nof_parents = len_vs - 1;
+
+  if (!save_all_scores && nof_parents > max_parents) return;
   for(i=0; i<nof_vars; ++i){
-    varset_t iset = 1U<<i;
+    varset_t iset = SINGLETON(i);
     if (vs & iset) {
       int nof_freqs = contab2condtab(i, len_vs);
+
       vs ^= iset;
       if (nof_parents > max_parents) {
 	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
@@ -504,7 +507,7 @@ void walk_contabs(int len_vs, varset_t vs, int nof_calls)
     int i;
     for (i=0; i<nof_calls; ++i) {
       contab2contab(i, len_vs);
-      walk_contabs(len_vs-1, vs^(1U<<i), i);
+      walk_contabs(len_vs-1, vs^SINGLETON(i), i);
     }
   }
 }
@@ -520,7 +523,7 @@ int ilog2(int i) /* i has to be > 0 */
 varset_t task_index2varset(int nof_taskvars, int task_index)
 {
   varset_t allvars = LARGEST_SET(nof_vars);
-  varset_t fixvars = task_index << nof_taskvars;
+  varset_t fixvars = ((varset_t) task_index) << nof_taskvars;
   return (~fixvars) & allvars;
 }
  
@@ -534,6 +537,8 @@ int main(int argc, char* argv[])
       gopt_option('c', GOPT_ARG, gopt_shorts('c'), gopt_longs( "constraints" )),
       gopt_option('p', GOPT_ARG, gopt_shorts('p'), gopt_longs( "prior" )),
       gopt_option('s', GOPT_ARG, gopt_shorts('s'), gopt_longs( "selectvars" )),
+      gopt_option('b', GOPT_NOARG, gopt_shorts(0), gopt_longs( "no-save-all" )),
+      gopt_option('x', GOPT_NOARG, gopt_shorts(0), gopt_longs( "no-recurse" )),
       gopt_option('m', GOPT_ARG, gopt_shorts('m'), gopt_longs( "max-parents" ))
 						    )
 			    );
@@ -547,16 +552,20 @@ int main(int argc, char* argv[])
             " -c --constraints cstrfile\n"
             " -p --prior priorfile\n"
 	    " -m --max-parents\n"
+	    " --no-save-all\n"
 	    " -s --selectvars selfile\n"
+	    " --no-recurse\n"
 );
     return 1;
   } else {
     const char* nof_tasks_s;
     const char* task_index_s;
     const char* max_parents_s;
+    const char* tmp; /* for boolean flags */
     int nof_tasks   = 1;
     int task_index  = 0;
     int nof_fixvars = 0;
+    int no_recurse  = 0;
     int len_vs;
     const char* cstrfile   = NULL;
     const char* priorfile  = NULL;
@@ -571,7 +580,8 @@ int main(int argc, char* argv[])
     if (gopt_arg(options, 'l', &logregfile)){} ; /* could check file etc. */
     if (gopt_arg(options, 's', &selfile)){} ; /* could check file */
     if (gopt_arg(options, 'm', &max_parents_s)) max_parents = atoi(max_parents_s);
-    
+    if (gopt_arg(options, 'b', &tmp)) save_all_scores = 0;  
+    if (gopt_arg(options, 'x', &tmp)) no_recurse = 1;  
     if (task_index >= nof_tasks) {
       fprintf(stderr, 
 	      "task index must be less than nof_tasks\n");
@@ -585,7 +595,8 @@ int main(int argc, char* argv[])
       return 3;
     }
     
-    init_globals(argv[1], argv[2], argv[3], argv[argc-1], cstrfile, priorfile, logregfile, selfile);
+    init_globals(argv[1], argv[2], argv[3], argv[argc-1],
+		 cstrfile, priorfile, logregfile, selfile);
     vs = task_index2varset(nof_vars - nof_fixvars, task_index);
 
     {
@@ -596,15 +607,14 @@ int main(int argc, char* argv[])
 
       len_vs = nof_vars; 
       for(i=0; i<nof_vars; ++i)
-	if(!(vs & (1U<<i)))
+	if(!(vs & SINGLETON(i)))
 	  contab2contab(i, len_vs--);
     }
 
-#if 0
-    if(qnml_scoretable != 0) walk_contabs0(len_vs, vs, nof_vars-nof_fixvars);
-#endif
-
-    walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
+    if(no_recurse)
+      scores(len_vs, vs);
+    else
+      walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
 
     free_globals();
   }

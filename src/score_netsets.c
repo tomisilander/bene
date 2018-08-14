@@ -14,7 +14,7 @@ score_t score_net(char* netfile, char* dirprefix, int nof_vars, FILE** fins){
   int v;
   varset_t varset;
   FILE* netf = strcmp(netfile,"-") ? fopen(netfile, "r") : stdin;
-  for(v=0; 1 == fscanf(netf, "%u", &varset); ++v){ /* for each variable */
+  for(v=0; 1 == fscanf(netf, "%"VARSET_SCNFMT, &varset); ++v){ /* for each variable */
     score_t vscore  = 0; /* sum the wscores here */ 
     score_t pscore  = 0; /* original parent set score to used as a scaler */
     score_t wscore  = 0; /* working parent set score */

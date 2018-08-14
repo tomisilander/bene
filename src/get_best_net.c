@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
       FILE* netf = fopen(argv[4],"w");
       int i;
       for (i=0;i<nof_vars;++i){
-	fprintf(netf, "%u\n", net[i]);
+	fprintf(netf, "%"VARSET_PRIFMT"\n", net[i]);
       }
       fclose(netf);
     }

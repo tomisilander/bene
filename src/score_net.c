@@ -13,7 +13,7 @@ score_t score_net(char* netfile, char* dirprefix){
   int v;
   varset_t varset;
   FILE* netf = strcmp(netfile,"-") ? fopen(netfile, "rt") : stdin;
-  for(v=0; 1 == fscanf(netf, "%u", &varset); ++v){
+  for(v=0; 1 == fscanf(netf, "%"VARSET_SCNFMT, &varset); ++v){
     score_t vscore;
     FILE* fin = open_file(dirprefix, v, "", "rb");
     fseek(fin, varset2parset(v, varset)*sizeof(score_t), SEEK_SET);

@@ -10,7 +10,7 @@ void net2parents(char* netfile, char* parfile)
   varset_t varset;
   FILE* netf = strcmp(netfile,"-") ? fopen(netfile, "r") : stdin;
   FILE* parf = strcmp(parfile,"-") ? fopen(parfile, "w") : stdout;
-  for(v=0; 1 == fscanf(netf, "%u", &varset); ++v){
+  for(v=0; 1 == fscanf(netf, "%"VARSET_SCNFMT, &varset); ++v){
     int p;
     for(p=0; varset; ++p, varset>>=1){
       if(varset & 1) {
