@@ -28,8 +28,10 @@ int  N;
 int  nof_vars;
 int  nof_cols;
 int* nof_colvals;
-int* nof_vals;
+int* nof_vals = NULL;
 int* sel_vars;
+
+const char* datfile = NULL;
 
 /* Hashing and working memory */
 
@@ -96,8 +98,8 @@ void get_sel_vars(const char* selfile) {
 
 void init_nof_vals() {
   /* nof_vars and sel_vars have been initialied by now */
-  
-  nof_vals = (int*) calloc(nof_vars, sizeof(int));    
+  /* should you allocate somewhere else */
+  if (nof_vals == NULL) nof_vals = (int*) calloc(nof_vars, sizeof(int));    
 
   /* List selected variables */
   if (nof_vars == nof_cols) {
@@ -153,7 +155,6 @@ xtab* dat2ctb(const char* datfile) {
   int j  = 0; /* variable index */
   uint h = 0;
   int v  = 0;
-
   while(1 == fscanf(datf, "%d", &v)){
     i %= nof_cols;
     if (i++ != sel_vars[j]) continue;
@@ -362,7 +363,7 @@ void init_globals(const char* vdfile, const char* datfile, char* essarg, const c
 }
 
 
-void free_globals_for_selvars() {
+void free_globals_for_sel_vars() {
   int i;
   
   free(freqmem);
@@ -379,10 +380,9 @@ void free_globals_for_selvars() {
 }
 
 void free_globals(int use_subset_walker){
-  int i;
   
   if (! use_subset_walker){
-    free_globals_for_selvars();
+    free_globals_for_sel_vars();
   } /* otherwise taken care by subset walker */
 
   free_scorer();
@@ -542,6 +542,7 @@ void walk_contabs0(int len_vs, varset_t vs, int nof_calls)
 void walk_contabs(int len_vs, varset_t vs, int first_out_ix)
 {
 
+  /* printf("%d %d\n", len_vs, vs); */
   scores(len_vs, vs);
 
   if (len_vs > 1){
@@ -553,26 +554,26 @@ void walk_contabs(int len_vs, varset_t vs, int first_out_ix)
   }
 }
 
-void walk_subsets(int max_i, int len_sel)
+void walk_subsets(int max_i, int len_sel, int m)
 {
-  int i;
   
   if (len_sel == nof_vars) {
-
-    init_nof_vals();
-    init_xh();
-    init_memory("datafiletys");
-
-    walk_contabs(nof_vars, LARGEST_SET(nof_vars), nof_vars);
-
+    int first_out_ix = sel_vars[0]>0 ? 0 : m;
+    /* 
+       int i; for(i=0;i<nof_vars;++i)printf("%d ",sel_vars[i]);
+       printf(" - %d\n", first_out_ix); */
+    init_globals_for_sel_vars(datfile);
+    walk_contabs(nof_vars, LARGEST_SET(nof_vars), first_out_ix);
+    free_globals_for_sel_vars();
     
     return;
   }
 
-  sel_vars[len_sel] = max_i;
-  walk_subsets(max_i-1, len_sel+1);
-  for(i=len_sel; i<nof_vars; ++i) sel_vars[i] = 0;
-  if (max_i > nof_vars - len_sel) walk_subsets(max_i-1, len_sel);
+  sel_vars[nof_vars-1-len_sel] = max_i;
+  walk_subsets(max_i-1, len_sel+1, m);
+  if (max_i +1 > nof_vars - len_sel) {
+    walk_subsets(max_i-1, len_sel, max_i);
+  }
 }
 
     
@@ -620,6 +621,7 @@ int main(int argc, char* argv[])
 	    " --no-save-all\n"
 	    " -s --selectvars selfile\n"
 	    " --no-recurse\n"
+	    " --use-subset-walker\n"
 );
     return 1;
   } else {
@@ -662,7 +664,8 @@ int main(int argc, char* argv[])
       return 3;
     }
     
-    init_globals(argv[1], argv[2], argv[3], argv[argc-1],
+    datfile = argv[2];
+    init_globals(argv[1], datfile, argv[3], argv[argc-1],
 		 cstrfile, priorfile, logregfile, selfile, use_subset_walker);
     vs = task_index2varset(nof_vars - nof_fixvars, task_index);
 
@@ -682,7 +685,7 @@ int main(int argc, char* argv[])
       scores(len_vs, vs);
     else
       if (use_subset_walker) /* one might want to use selfile still to select columns first, but .. */
-	walk_subsets(nof_cols-1, 0);      
+	walk_subsets(nof_cols-1, 0, nof_cols);      
       else
 	walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
 
