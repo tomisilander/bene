@@ -4,8 +4,8 @@ if [ ${1:-UNIX} == "WIN" ]; then
     CC="i586-mingw32msvc-gcc"
     EXT=".exe"
 else
-    #CC=gcc
-    CC=c99
+    CC=gcc
+    #CC=c99
 fi
 
 
