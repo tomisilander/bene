@@ -32,12 +32,13 @@ int* nof_vals = NULL;
 int* sel_vars;
 
 const char* datfile = NULL;
+int* data = NULL;
 
 /* Hashing and working memory */
 
 #define RANGE  (1024)
 uint** xh;  /* a random number [0..RANGE[ for each value of each variable  */
-uchar** keymem;  /* for each number of vars emory for configs and counts   */ 
+uchar** keymem;  /* for each number of vars memory for configs and counts  */ 
 xtab**  ctbs;    /* for each number of vars hash table for configs         */ 
 
 int*    freqmem; /* a working memory to collect the conditional frequences */
@@ -60,7 +61,7 @@ int use_MU = 0;
 
 /* maximum number of parents */
 
-int max_parents = 1024;
+int max_parents = -1;
 
 /* Result file and output buffer */
 
@@ -75,10 +76,10 @@ int save_all_scores = 1; /* otherwise do not save if over max_parents */
 
 void get_sel_vars(const char* selfile) {
   
-  nof_vars = (selfile == NULL) ? nof_cols : nof_lines(selfile);
+  nof_vars = (selfile) ? nof_lines(selfile) : nof_cols; 
   sel_vars = (int*) calloc(nof_vars, sizeof(int));
   
-  if (selfile == NULL){
+  if (!selfile){
     int i; for (i=0; i<nof_vars; ++i) sel_vars[i]=i;
   }else{
     FILE* self = fopen(selfile,"r");
@@ -99,7 +100,7 @@ void get_sel_vars(const char* selfile) {
 void init_nof_vals() {
   /* nof_vars and sel_vars have been initialied by now */
   /* should you allocate somewhere else */
-  if (nof_vals == NULL) nof_vals = (int*) calloc(nof_vars, sizeof(int));    
+  if (! nof_vals) nof_vals = (int*) calloc(nof_vars, sizeof(int));    
 
   /* List selected variables */
   if (nof_vars == nof_cols) {
@@ -147,33 +148,70 @@ void init_xh(){
   }
 }
 
-xtab* dat2ctb(const char* datfile) {
-  xtab* ctb = xcreate(RANGE, N);
-  FILE* datf = fopen(datfile,"r");
-  uchar index[MAX_NOF_VARS];
+void cread_data(const char* datfile){
+  int nof_items = N*nof_cols;
+  data = (int*) malloc(nof_items*sizeof(int));
+  FILE* datf = fopen(datfile,"r"); 
+  int* dp;
+  for(dp=data; dp<data+nof_items; ++dp)
+    if (1 == fscanf(datf, "%d", dp)){}
+  fclose(datf);
+}
+
+void next_line_file(FILE* datf, uchar* row_vars) {
   int i  = 0; /* column index */
   int j  = 0; /* variable index */
-  uint h = 0;
-  int v  = 0;
-  while(1 == fscanf(datf, "%d", &v)){
-    i %= nof_cols;
-    if (i++ != sel_vars[j]) continue;
+  int r  = 0;
+  
+  for(j=0; j<nof_vars; ++j)
+    for(;i<=sel_vars[j]; ++i)
+      if (1 == fscanf(datf, "%d", &r))
+	row_vars[j]=r;
+ 
+  for(; i<nof_cols; ++i) if (1==fscanf(datf, "%d", &r)){}
+}  
 
-    h ^= xh[j][v];
-    index[j++] = v;
+void next_line_data(int row_ix, uchar* row_vars){
+  int* row = data+row_ix*nof_cols;
+  int j  = 0;
+  for(j=0;j<nof_vars;++j) {
+    row_vars[j]= row[sel_vars[j]];
+  }
+  row_ix += 1;
+}
 
-    if (j == nof_vars){
+xtab* dat2ctb(const char* datfile) {
+  xtab* ctb = xcreate(RANGE, N);
+  FILE* datf = (data) ? NULL : fopen(datfile,"r"); 
+  uchar* row_vars = (uchar*) malloc(nof_vars*sizeof(uchar));
+  int row = 0;
+
+  for(row=0;row<N;++row){
+    uint h = 0;
+
+    if (data)
+      next_line_data(row, row_vars);
+    else
+      next_line_file(datf, row_vars);
+      
+    { /* calculate hashkey */
+      int j;
+      for(j=0;j<nof_vars;++j)
+	h ^= xh[j][row_vars[j]];
+    }
+
+    { /* add to hashtable */
       int new = 0;
-      xentry* x = xadd(ctb, h, index, nof_vars, &new);
+      xentry* x = xadd(ctb, h, row_vars, nof_vars, &new);
       if(new) {
-	x->key = memcpy(malloc(nof_vars), index, nof_vars);
+	x->key = memcpy(malloc(nof_vars), row_vars, nof_vars);
 	x->val = calloc(1, sizeof(int));
       } 
       ++ *x->val;
-      h = j = 0;
     }
   }
-  fclose(datf);
+  free(row_vars);
+  if (datf) fclose(datf);
   return ctb;
 }
 
@@ -279,7 +317,7 @@ void create_output_buffer(const char* priorfile)
   buffer = (score_t*) calloc(BUFFER_SIZE, sizeof(score_t));
   buffer_end = buffer + BUFFER_SIZE;
   buffer_ptr = buffer;
-  if(priorfile != NULL) {
+  if(priorfile) {
     if (strcmp(priorfile,"@MU") == 0){
         use_MU = 1;
     } else {
@@ -349,14 +387,22 @@ void init_globals(const char* vdfile, const char* datfile, char* essarg, const c
   create_output_buffer(priorfile);
   
   init_data_format(vdfile, datfile);
+  
   if (! use_subset_walker) {
     get_sel_vars(selfile);
+    max_parents = nof_vars-1;
     init_globals_for_sel_vars(datfile);
-  } else { /* use subset walker with chaging selvars */
+  } else {
+    /* use subset walker with changing sel_vars */
     nof_vars = max_parents+1;
     if (nof_vars > nof_cols) nof_vars = nof_cols;
     sel_vars = (int*) calloc(nof_vars, sizeof(int));
-    /* init_globals in walker*/
+    {
+      int max_datacount = (1<<20);
+      int data_count = N * nof_cols;
+      if(data_count <= max_datacount) cread_data(datfile);
+    }
+    /* init_globals_for_selvars in walker*/
   }
   init_scorer(essarg, logregfile);
   if(cstrfile) get_constraints(cstrfile);
@@ -391,12 +437,13 @@ void free_globals(int use_subset_walker){
 
   flush_n_free_output_buffer();
   if(resultf != stdout) fclose(resultf);
-  if(priorf != NULL) fclose(priorf);
+  if(priorf) fclose(priorf);
 
   free(nof_vals);
   free(nof_colvals);
   free(sel_vars);
-
+  if (data) free(data);
+  
 }
 
 /********* AND THE MAIN STUFF ******** */
@@ -511,11 +558,11 @@ void scores(int len_vs, varset_t vs)
       }
       if (buffer_ptr == buffer_end){
 	fwrite(buffer, sizeof(score_t), BUFFER_SIZE, resultf);
-	if (priorf == NULL){
-	  memset(buffer, 0, BUFFER_SIZE*sizeof(score_t));
-	} else {
+	if (priorf){
 	  int _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
          _nof_priors ++; /* to fget rid of compiler warning about unused variable */
+	} else {
+	  memset(buffer, 0, BUFFER_SIZE*sizeof(score_t));
 	}
 	buffer_ptr = buffer;
       }
@@ -523,21 +570,6 @@ void scores(int len_vs, varset_t vs)
     }
   }
 }
-
-#if 0
-void walk_contabs0(int len_vs, varset_t vs, int nof_calls)
-{
-	qnml_scoretable[vs] = qnml_vs_scorer(0,vs,len_vs);
-
-	if (len_vs > 1){
-	int i;
-	for (i=0; i<nof_calls; ++i) {
-	contab2contab(i, len_vs);
-	walk_contabs0(len_vs-1, vs^(1U<<i), i);
-    }
-  }
-}
-#endif
 
 void walk_contabs(int len_vs, varset_t vs, int first_out_ix)
 {
@@ -559,9 +591,10 @@ void walk_subsets(int max_i, int len_sel, int m)
   
   if (len_sel == nof_vars) {
     int first_out_ix = sel_vars[0]>0 ? 0 : m;
-    /* 
+/*
        int i; for(i=0;i<nof_vars;++i)printf("%d ",sel_vars[i]);
-       printf(" - %d\n", first_out_ix); */
+       printf(" - %d\n", first_out_ix);
+*/
     init_globals_for_sel_vars(datfile);
     walk_contabs(nof_vars, LARGEST_SET(nof_vars), first_out_ix);
     free_globals_for_sel_vars();
@@ -663,7 +696,7 @@ int main(int argc, char* argv[])
 	      "nof_tasks has to be a power of two - %d is not\n", nof_tasks);
       return 3;
     }
-    
+
     datfile = argv[2];
     init_globals(argv[1], datfile, argv[3], argv[argc-1],
 		 cstrfile, priorfile, logregfile, selfile, use_subset_walker);
@@ -684,7 +717,7 @@ int main(int argc, char* argv[])
     if(no_recurse)
       scores(len_vs, vs);
     else
-      if (use_subset_walker) /* one might want to use selfile still to select columns first, but .. */
+      if (use_subset_walker)
 	walk_subsets(nof_cols-1, 0, nof_cols);      
       else
 	walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
