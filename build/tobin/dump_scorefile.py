@@ -38,7 +38,7 @@ def write_file(fn,l,len_l):
     for (parents, score) in islice(l,len_l):
         nof_pars     = len(parents)
         parents_str  = ' '.join(map(str, parents))
-        print("%f %d %s" % (score, nof_pars, parents_str), file=f)
+        f.write("%f %d %s\n" % (score, nof_pars, parents_str))
     f.close()
     
 def printer(scorefile, n, k, resdir):
@@ -58,7 +58,7 @@ def printer(scorefile, n, k, resdir):
     ns = nof_scores(n,k)//n
     for i,fn in enumerate(filenames):
         f=open(fn,'w');
-        print(i,ns,file=f)
+        f.write("%d %d\n"%(i,ns))
         f.close()
         
     for s in  gen_scores(scorefile,n,k):
