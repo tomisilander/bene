@@ -41,7 +41,7 @@ score_t xic_score(int i, varset_t psi, int nof_freqs){
   return res;
 }
 
-scorefun init_XIC_scorer(char* essarg){
+scorefun init_XIC_scorer(const char* essarg){
   bic = strncmp(essarg,"BIC", 3) == 0;
   ensure_ilogi(MIN(N,BIG_XIC_DATA));
   return xic_score;

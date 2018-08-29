@@ -7,7 +7,7 @@
 /* BIC = log(ML) - 0.5*nof_params*log(n) */
 /* AIC = log(ML) - 0.5*nof_params */
 
-extern scorefun init_XIC_scorer(char*);
+extern scorefun init_XIC_scorer(const char*);
 extern void free_XIC_scorer();
 
 #endif

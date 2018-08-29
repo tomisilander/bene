@@ -52,6 +52,8 @@ varset_t* nopes = 0;
 
 scorefun scorer;
 scorefree free_scorer;
+const char* logregfile = NULL;
+const char* essarg = NULL;
 
 /* Prior */
 
@@ -350,7 +352,7 @@ score_t get_nof_cfgs(varset_t vs)
   return res;
 }
 
-void init_scorer(char* essarg, const char* logregfile) {
+void init_scorer(const char* essarg, const char* logregfile) {
   int arglen = strlen(essarg); /* how about checking valid length */
   
   if((0==strncmp(essarg, "BIC", 3)) || (0==strncmp(essarg, "AIC", 3)) ) {
@@ -360,7 +362,7 @@ void init_scorer(char* essarg, const char* logregfile) {
     scorer = init_fNML_scorer(logregfile);
     free_scorer = free_fNML_scorer;
   } else if(0==strncmp(essarg, "qNML", 4)) {
-    scorer = init_qNML_scorer(logregfile);
+    scorer = init_qNML_scorer();
     free_scorer = free_qNML_scorer;
   } else if((essarg[arglen-1]=='L') || (essarg[arglen-1]=='l')) {
     scorer = init_LOO_scorer(essarg);
@@ -380,7 +382,7 @@ void init_globals_for_sel_vars(const char* datfile){
   init_memory(datfile);
 }
 
-void init_globals(const char* vdfile, const char* datfile, char* essarg, const char* resfile,
+void init_globals(const char* vdfile, const char* datfile, const char* essarg, const char* resfile,
 		  const char* cstrfile, const char* priorfile, 
                   const char* logregfile, const char* selfile, int use_subset_walker) {
   resultf = (strcmp("-", resfile) == 0) ? stdout : fopen(resfile, "wb");
@@ -392,6 +394,7 @@ void init_globals(const char* vdfile, const char* datfile, char* essarg, const c
     get_sel_vars(selfile);
     max_parents = nof_vars-1;
     init_globals_for_sel_vars(datfile);
+    init_scorer(essarg, logregfile);
   } else {
     /* use subset walker with changing sel_vars */
     nof_vars = max_parents+1;
@@ -402,9 +405,8 @@ void init_globals(const char* vdfile, const char* datfile, char* essarg, const c
       int data_count = N * nof_cols;
       if(data_count <= max_datacount) cread_data(datfile);
     }
-    /* init_globals_for_selvars in walker*/
+    /* init_globals_for_selvars and scorer in walker*/
   }
-  init_scorer(essarg, logregfile);
   if(cstrfile) get_constraints(cstrfile);
 }
 
@@ -596,6 +598,10 @@ void walk_subsets(int max_i, int len_sel, int m)
        printf(" - %d\n", first_out_ix);
 */
     init_globals_for_sel_vars(datfile);
+    if(!scorer)
+      init_scorer(essarg, logregfile);
+    else if (scorer == fnml_score)
+      init_logreg(logregfile, nof_vars, nof_vals);
     walk_contabs(nof_vars, LARGEST_SET(nof_vars), first_out_ix);
     free_globals_for_sel_vars();
     
@@ -670,7 +676,6 @@ int main(int argc, char* argv[])
     int len_vs;
     const char* cstrfile   = NULL;
     const char* priorfile  = NULL;
-    const char* logregfile = NULL;
     const char* selfile = NULL;
     varset_t vs;
     
@@ -698,7 +703,8 @@ int main(int argc, char* argv[])
     }
 
     datfile = argv[2];
-    init_globals(argv[1], datfile, argv[3], argv[argc-1],
+    essarg  = argv[3];
+    init_globals(argv[1], datfile, essarg, argv[argc-1],
 		 cstrfile, priorfile, logregfile, selfile, use_subset_walker);
     vs = task_index2varset(nof_vars - nof_fixvars, task_index);
 

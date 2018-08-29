@@ -7,6 +7,7 @@
 /* NML = log(ML) - SUM_D log(ML(D)) */
 
 extern scorefun init_fNML_scorer();
+extern score_t fnml_score();
 extern void free_fNML_scorer();
 
 #endif

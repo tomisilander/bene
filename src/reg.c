@@ -17,24 +17,27 @@ void init_globconsts() {
 
 void init_logreg(const char* logregfile, int nof_vars, int* nof_vals){
   
-  init_globconsts();
+  if (hlogpi == 0.0) init_globconsts();
 
-  logregtab = (float**) calloc(256, sizeof(float*));
+  if (! logregtab) logregtab = (float**) calloc(256, sizeof(float*));
   {
     int i;
-    FILE* logregf = fopen(logregfile, "rb");
+    FILE* logregf = NULL;
 
     for(i=0; i<nof_vars; ++i){
       int vci = nof_vals[i];
-      if (logregtab[vci-1]==NULL) {
+      if (! logregtab[vci-1]) {
 	logregtab[vci-1] = (float*) malloc(2001 * sizeof(float));
+	if(!logregf) logregf = fopen(logregfile, "rb");
 	fseek(logregf,(vci-1)*2001*sizeof(float),SEEK_SET);
 	FREAD(logregtab[vci-1], sizeof(float), 2001, logregf);
       }
     }
-    fclose(logregf);
+    if (logregf) fclose(logregf);
   }
 }
+
+/* nobody uses this ? */
 
 void init_logregN(const char* logregfile){
   
@@ -60,7 +63,7 @@ void free_logreg(int nof_vars, int* nof_vals){
   int i;
   for(i=0; i<nof_vars; ++i){
     int vci = nof_vals[i];
-    if (logregtab[vci-1]!=NULL) {
+    if (logregtab[vci-1]) {
       free(logregtab[vci-1]);
       logregtab[vci-1]=NULL;
     }

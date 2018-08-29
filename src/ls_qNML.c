@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include "get_local_scores.h"
 #include "ilogi.h"
-#include "reg.h"
 #include "ls_qNML.h"
 
 extern int*     nof_vals;
@@ -101,7 +100,7 @@ score_t qnml_score(int i, varset_t psi, int nof_freqs){
   return res;
 }
 
-scorefun init_qNML_scorer(const char* logregfile){
+scorefun init_qNML_scorer(){
   init_logregNq(100);
   ensure_ilogi(MIN(N,BIG_NML_DATA));
   return qnml_score;
