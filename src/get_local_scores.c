@@ -355,7 +355,9 @@ score_t get_nof_cfgs(varset_t vs)
 void init_scorer(const char* essarg, const char* logregfile) {
   int arglen = strlen(essarg); /* how about checking valid length */
   
-  if((0==strncmp(essarg, "BIC", 3)) || (0==strncmp(essarg, "AIC", 3)) ) {
+  if((0==strncmp(essarg, "BIC", 3))
+     || (0==strncmp(essarg, "AIC", 3))
+     || (0==strncmp(essarg, "HQC", 3)) ) {
     scorer = init_XIC_scorer(essarg);
     free_scorer = free_XIC_scorer;
   } else if(0==strncmp(essarg, "fNML", 4)) {
@@ -650,7 +652,7 @@ int main(int argc, char* argv[])
   if (argc != 5){
     fprintf(stderr, 
 	    "Usage: get_local_scores vdfile datfile "
-	    "(ess[l|L|r|R|q|Q|S|s] | AIC | BIC | fNML | qNML) resfile \n" 
+	    "(ess[l|L|r|R|q|Q|S|s] | AIC | BIC | HQC| fNML | qNML) resfile \n" 
             " -l --logregfile file : needed for fNML and qNML\n"
 	    " --nof-tasks n\n"
             " --task-index i\n"

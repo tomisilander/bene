@@ -8,11 +8,11 @@
 extern int*     nof_vals;
 extern int      N;
 
-static int bic = 0;
+static char xic = 0;
+static score_t log_N = 0.0;
+static score_t loglog_N = 0.0;
 
 #define BIG_XIC_DATA (1<<16)
-
-/* XIC = log(ML) - 0.5*nof_params*log(n) */
 
 score_t xic_score(int i, varset_t psi, int nof_freqs){
 
@@ -21,8 +21,18 @@ score_t xic_score(int i, varset_t psi, int nof_freqs){
   score_t nof_params = pcc * (vc_v-1);
   int* freqp = freqmem;
   int* end_freqp = freqp + nof_freqs * vc_v;
-  score_t res = bic ? (-0.5 * nof_params * log(N)) : -nof_params;
 
+  score_t res = 0.0;
+  switch (xic) {
+  case 'B':
+    res = -0.5 * nof_params * log_N;
+    break;
+  case 'A':
+    res = -nof_params;
+    break;
+  case 'H':
+    res = -nof_params * loglog_N;
+  }
   
   for(;freqp < end_freqp; freqp += vc_v) {
     int  pcfreq = 0;
@@ -42,8 +52,10 @@ score_t xic_score(int i, varset_t psi, int nof_freqs){
 }
 
 scorefun init_XIC_scorer(const char* essarg){
-  bic = strncmp(essarg,"BIC", 3) == 0;
+  xic = essarg[0]; /* B, A or H */ 
   ensure_ilogi(MIN(N,BIG_XIC_DATA));
+  log_N = log(N);
+  loglog_N = log(log_N);
   return xic_score;
 }
 
