@@ -11,7 +11,7 @@ static float r1_s2  = 0.0;
 static float** logregtab = NULL;
 
 void init_globconsts() {
-  hlogpi = 5*log(pi);
+  hlogpi = 0.5*log(pi);
   r1_s2  = 1/sqrt(2);
 }
 
