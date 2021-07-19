@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 #include "get_local_scores.h"
 #include "ilogi.h"
 #include "reg.h"
@@ -25,14 +26,13 @@ score_t fnml_score(int i, varset_t psi, int nof_freqs){
     for(v = 0; v<vc_v; ++v) {
       int freq = freqp[v];
       if (freq) {
-	pcfreq += freq;
-	res += (freq < len_ilogi) ? ilogi[freq] : freq * log(freq);
+        pcfreq += freq;
+        res += (freq < len_ilogi) ? ilogi[freq] : freq * log(freq);
       }
     }
     res -= (pcfreq < len_ilogi) ? ilogi[pcfreq] : pcfreq * log(pcfreq);
     res -= logreg(pcfreq, vc_v); /* regret */
   }
-
   return res;
 }
 
