@@ -43,4 +43,4 @@ $CC $CFLAGS -o $BINDIR/dump_scorefile$EXT dump_scorefile.c
 $CC $CFLAGS -o $BINDIR/gen_prior_file$EXT gen_prior_file.c gopt.o -lm
 $CC $CFLAGS -o $BINDIR/force_arc$EXT force_arc.c files.o
 
-cp tobin/* $BINDIR
+cp -p tobin/* $BINDIR
