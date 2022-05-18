@@ -394,7 +394,7 @@ void init_globals(const char* vdfile, const char* datfile, const char* essarg, c
   
   if (! use_subset_walker) {
     get_sel_vars(selfile);
-    max_parents = nof_vars-1;
+    if (max_parents == -1) max_parents = nof_vars-1;
     init_globals_for_sel_vars(datfile);
     init_scorer(essarg, logregfile);
   } else {

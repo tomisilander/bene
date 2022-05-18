@@ -4,11 +4,12 @@ d=`dirname $0`
 
 if [ $# -eq 1 ]; then
 	ess=$1
+	shift
 else
     ess=1
 fi
 
-score=`$d/../bin/data2net.sh $d/iris.vd $d/iris.idt $ess $d/resdir`
+score=`$d/../bin/data2net.sh $d/iris.vd $d/iris.idt $ess $d/resdir $@`
 echo Score : $score
 echo Arcs : 
 $d/../bin/net2parents $d/resdir/net - | $d/../bin/parents2arcs - -
