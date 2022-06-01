@@ -1,47 +1,52 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
-import sys, os, subprocess
+import sys, subprocess, pathlib
 
-def main(vdfile, datfile, score, resdir,
-         nof_tasks=1, task_index=0, cstrfile=None):
-    nof_vars = len(open(vdfile).readlines())
-    bindir=os.path.dirname(__file__)
-    
-    kws = {'binpath/'   : os.path.join(bindir,''),
-           'nof_vars'   : str(nof_vars),
-           'rdir'       : resdir,
-           'rdir/'      : os.path.join(resdir,''),
-           'vdfile'     : vdfile,
-           'datfile'    : datfile,
-           'score'      : score,
-           'nof_tasks'  : '--nof-tasks %d' % nof_tasks,
-           'task_index' : '--task-index %d' % task_index,
-           'cstr'       : '-c %s' % cstrfile if cstrfile != None else '',
-           'ext'        : '.exe' if sys.platform == 'win32' else ''
-}
+def build_cmd(args):
+    nof_vars = len(open(args.vdfile).readlines())
+    bindir = pathlib.Path(__file__).parent
+    ext = '.exe' if sys.platform == 'win32' else ''
+    rdir = pathlib.Path(args.resdir)
 
-    scorecmd = """
-{binpath/}get_local_scores{ext} {vdfile} {datfile} {score} {rdir/}res {nof_tasks} {task_index} {cstr}
-{binpath/}split_local_scores{ext}   {nof_vars} {rdir}
-{binpath/}reverse_local_scores{ext} {nof_vars} {rdir}
-{binpath/}get_best_parents{ext}     {nof_vars} {rdir}
-{binpath/}get_best_sinks{ext}       {nof_vars} {rdir} {rdir/}sinks
-{binpath/}get_best_order{ext}       {nof_vars} {rdir}/sinks {rdir/}ord
-{binpath/}get_best_net{ext}         {nof_vars} {rdir} {rdir/}ord {rdir/}net
-{binpath/}score_net{ext}            {rdir/}net {rdir}
-""".format(**kws) 
-        
-    if os.path.exists(resdir):
-        if not os.path.isdir(resdir):
-            sys.exit('%s is not a directory' % resir)
-    else:
-        os.makedirs(resdir)
-    subprocess.call(scorecmd, shell=True)
+    options = ' '.join(f"{name} {value}" for name,value in vars(args).items() 
+                       if not name in ('vdfile', 'datfile', 'score', 'resdir') and not value is None)
+    cmd = f"""
+    {bindir}/get_local_scores{ext} {args.vdfile} {args.datfile} {args.score} {rdir}/res {options}
+    {bindir}/split_local_scores{ext}   {nof_vars} {rdir}
+    {bindir}/reverse_local_scores{ext} {nof_vars} {rdir}
+    {bindir}/get_best_parents{ext}     {nof_vars} {rdir}
+    {bindir}/get_best_sinks{ext}       {nof_vars} {rdir} {rdir}/sinks
+    {bindir}/get_best_order{ext}       {nof_vars} {rdir}/sinks {rdir}/ord
+    {bindir}/get_best_net{ext}         {nof_vars} {rdir} {rdir}/ord {rdir}/net
+    {bindir}/score_net{ext}            {rdir}/net {rdir}
+    """
+    print(cmd)
 
-from coliche import che
-che(main,
-    """vdfile;datfile;score;resdir; 
-      --nof-tasks nof_tasks(int): default: 1
-      --task-index task_index: default: 0
-      -c --constraints cstrfile
-""")
+    return cmd
+
+def main(args):
+    try:  
+        rdir = pathlib.Path(args.resdir)
+        rdir.mkdir(parents=True, exist_ok=True)
+    except:
+        raise
+    cmd = build_cmd(args)
+    subprocess.call(cmd, shell=True)
+
+def add_arguments(parser):
+    parser.add_argument('vdfile')
+    parser.add_argument('datfile')
+    parser.add_argument('score')
+    parser.add_argument('resdir')
+    parser.add_argument('--nof-tasks', type=int)
+    parser.add_argument('--task-index', type=int)
+    parser.add_argument('-c', '--constraints')
+    # should add more
+
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    add_arguments(parser)
+    args = parser.parse_args()
+    main(args)
