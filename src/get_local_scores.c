@@ -23,13 +23,12 @@
 /******** G L O B A L S *********/
 
 /* Data format */
-
 int  N;
-int  nof_vars;
-int  nof_cols;
-int* nof_colvals;
+int  nof_vars; /* nof variables we consider */ 
+int  nof_cols; /* nof columns in a data */ 
+int* nof_colvals = NULL;
 int* nof_vals = NULL;
-int* sel_vars;
+int* sel_vars = NULL;
 
 const char* datfile = NULL;
 int* data = NULL;
@@ -74,6 +73,7 @@ score_t* buffer_end;
 score_t* buffer_ptr;
 int save_all_scores = 1; /* otherwise do not save if over max_parents */
 
+
 /***** Initialising globals *****/
 
 void get_sel_vars(const char* selfile) {
@@ -83,16 +83,17 @@ void get_sel_vars(const char* selfile) {
   
   if (!selfile){
     int i; for (i=0; i<nof_vars; ++i) sel_vars[i]=i;
-  }else{
+  } else {
     FILE* self = fopen(selfile,"r");
-    int i; for (i=0; i<nof_vars; ++i) {
+    int i; 
+    for (i=0; i<nof_vars; ++i) {
       if (1 != fscanf(self, "%d", sel_vars+i)) {
-	fprintf(stderr, "Reading selected variable number %d failed\n", i);
-	exit(1);
+    	  fprintf(stderr, "Reading selected variable number %d failed\n", i);
+	      exit(1);
       }
       if (sel_vars[i]>=nof_cols){
-	fprintf(stderr, "Selected variable %d larger than number of columns %d\n", sel_vars[i], nof_cols);
-	exit(1);
+        fprintf(stderr, "Selected variable %d larger than number of columns %d\n", sel_vars[i], nof_cols);
+	      exit(1);
       }
     }
     fclose(self);
@@ -126,8 +127,8 @@ void init_data_format(const char* vdfile, const char* datfile) {
     int prev = 'X';
     while((EOF != (c=fgetc(vdf))) && (i<nof_cols)){
       if ((c=='\r') || (c=='\n' && prev!='\r')) {
-	/* line ended (but \n after \r may remain) */
-	++i;
+  	  /* line ended (but \n after \r may remain) */
+	      ++i;
       } else if (c != '\n'){
       	nof_colvals[i] += (c=='\t');
       }
@@ -168,7 +169,7 @@ void next_line_file(FILE* datf, uchar* row_vars) {
   for(j=0; j<nof_vars; ++j)
     for(;i<=sel_vars[j]; ++i)
       if (1 == fscanf(datf, "%d", &r))
-	row_vars[j]=r;
+	      row_vars[j]=r;
  
   for(; i<nof_cols; ++i) if (1==fscanf(datf, "%d", &r)){}
 }  
@@ -179,7 +180,6 @@ void next_line_data(int row_ix, uchar* row_vars){
   for(j=0;j<nof_vars;++j) {
     row_vars[j]= row[sel_vars[j]];
   }
-  row_ix += 1;
 }
 
 xtab* dat2ctb(const char* datfile) {
@@ -199,15 +199,15 @@ xtab* dat2ctb(const char* datfile) {
     { /* calculate hashkey */
       int j;
       for(j=0;j<nof_vars;++j)
-	h ^= xh[j][row_vars[j]];
+    	h ^= xh[j][row_vars[j]];
     }
 
     { /* add to hashtable */
       int new = 0;
       xentry* x = xadd(ctb, h, row_vars, nof_vars, &new);
       if(new) {
-	x->key = memcpy(malloc(nof_vars), row_vars, nof_vars);
-	x->val = calloc(1, sizeof(int));
+	      x->key = memcpy(malloc(nof_vars), row_vars, nof_vars);
+	      x->val = calloc(1, sizeof(int));
       } 
       ++ *x->val;
     }
@@ -553,22 +553,22 @@ void scores(int len_vs, varset_t vs)
 
       vs ^= iset;
       if (nof_parents > max_parents) {
-	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
+        *buffer_ptr++ = (score_t) MIN_NODE_SCORE;
       } else if (musts && 
-	  (((musts[i] & vs) != musts[i]) || ((nopes[i] & vs) != 0))) { 
-	*buffer_ptr++ = (score_t) MIN_NODE_SCORE;
+	              (((musts[i] & vs) != musts[i]) || ((nopes[i] & vs) != 0))) { 
+	      *buffer_ptr++ = (score_t) MIN_NODE_SCORE;
       } else {
-	*buffer_ptr++ += scorer(i, vs, nof_freqs) - use_MU*LOG2*nof_parents;
+	      *buffer_ptr++ += scorer(i, vs, nof_freqs) - use_MU*LOG2*nof_parents;
       }
       if (buffer_ptr == buffer_end){
-	fwrite(buffer, sizeof(score_t), BUFFER_SIZE, resultf);
-	if (priorf){
-	  int _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
-         _nof_priors ++; /* to fget rid of compiler warning about unused variable */
-	} else {
-	  memset(buffer, 0, BUFFER_SIZE*sizeof(score_t));
-	}
-	buffer_ptr = buffer;
+	      fwrite(buffer, sizeof(score_t), BUFFER_SIZE, resultf);
+	      if (priorf){
+	        int _nof_priors = fread(buffer, sizeof(score_t), BUFFER_SIZE, priorf);
+          _nof_priors ++; /* to fget rid of compiler warning about unused variable */
+	      } else {
+	        memset(buffer, 0, BUFFER_SIZE*sizeof(score_t));
+	      }
+	      buffer_ptr = buffer;
       }
       vs ^= iset;
     }
@@ -707,7 +707,7 @@ int main(int argc, char* argv[])
     datfile = argv[2];
     essarg  = argv[3];
     init_globals(argv[1], datfile, essarg, argv[argc-1],
-		 cstrfile, priorfile, logregfile, selfile, use_subset_walker);
+		             cstrfile, priorfile, logregfile, selfile, use_subset_walker);
     vs = task_index2varset(nof_vars - nof_fixvars, task_index);
 
     {
@@ -718,17 +718,17 @@ int main(int argc, char* argv[])
 
       len_vs = nof_vars; 
       for(i=0; i<nof_vars; ++i)
-	if(!(vs & SINGLETON(i)))
-	  contab2contab(i, len_vs--);
+	    if(!(vs & SINGLETON(i)))
+	      contab2contab(i, len_vs--);
     }
 
     if(no_recurse)
       scores(len_vs, vs);
     else
       if (use_subset_walker)
-	walk_subsets(nof_cols-1, 0, nof_cols);      
+      	walk_subsets(nof_cols-1, 0, nof_cols);      
       else
-	walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
+	      walk_contabs(len_vs, vs, nof_vars-nof_fixvars);
 
     free_globals(use_subset_walker);
   }
