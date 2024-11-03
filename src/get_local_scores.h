@@ -6,7 +6,7 @@
 extern int  N;
 extern int  nof_vars;
 extern int* nof_vals;
-int*    freqmem; /* a working memory to collect the conditional frequences */
+extern int*    freqmem; /* a working memory to collect the conditional frequences */
 
 extern score_t get_nof_cfgs(varset_t vs);
 typedef score_t (*scorefun) (int, varset_t, int);

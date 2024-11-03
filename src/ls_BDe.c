@@ -8,7 +8,7 @@
 extern int*     nof_vals;
 extern int      N;
 
-score_t ess;
+static score_t ess;
 
 static int*    freq2mem  = NULL;
 static int*    freq2mem2 = NULL;
