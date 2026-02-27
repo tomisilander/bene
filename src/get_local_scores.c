@@ -155,21 +155,13 @@ void init_data_format(const char *vdfile, const char *datfile)
   }
 }
 
-void init_xh()
-{
-  int i;
-  srand(666);
-  xh = calloc(nof_vars, sizeof(int *));
-  for (i = 0; i < nof_vars; ++i)
-  {
-    int v;
-    xh[i] = calloc(nof_vals[i], sizeof(uint));
-    for (v = 0; v < nof_vals[i]; ++v)
-    {
-      xh[i][v] = (int)((score_t)RANGE * rand() / (RAND_MAX + 1.0));
-    }
-  }
-}
+/* the xh initialization routine has been moved to xtab.c
+   to decouple hashing utilities from the local scoring code.  The
+   new version accepts parameters for the number of variables, an
+   array of value counts and the hash range; it returns an allocated
+   2‑D array which the caller stores in the global `xh`. */
+
+/* void init_xh() is now declared in xtab.h */
 
 void cread_data(const char *datfile)
 {
@@ -441,7 +433,8 @@ void init_scorer(const char *essarg, const char *logregfile)
 void init_globals_for_sel_vars(const char *datfile)
 {
   init_nof_vals();
-  init_xh();
+  /* allocate and seed random hashes for each variable/value */
+  xh = init_xh(nof_vars, nof_vals, RANGE);
   init_memory(datfile);
 }
 
@@ -495,9 +488,8 @@ void free_globals_for_sel_vars()
     free(keymem[i]);
   free(keymem);
 
-  for (i = 0; i < nof_vars; ++i)
-    free(xh[i]);
-  free(xh);
+  /* release random‑hash table allocated earlier */
+  free_xh(nof_vars, xh);
 }
 
 void free_globals(int use_subset_walker)

@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>           /* for srand, rand */
+#include "cfg.h"          /* for score_t (used in hashing) */
 #include "xtab.h"
 
 xtab* xcreate(int range, int nof_xentries){
@@ -69,5 +71,60 @@ xentry* xadd(xtab* t, uint h, uchar* key, int klen, int* new) {
   }
 
   return x;
+}
+
+/* ------------------------------------------------------------------
+   Random hash table initializer moved from get_local_scores.c.  The
+   function now takes explicit parameters instead of relying on globals
+   and returns the allocated structure so that the caller can store it
+   wherever is appropriate.
+   ------------------------------------------------------------------ */
+
+uint **init_xh(int nof_vars, int *nof_vals, int range)
+{
+  int i, v;
+  uint **xh_table;
+
+  /* deterministic behaviour for reproducibility; original code
+     seeded with a fixed constant.  If desired the caller may seed
+     elsewhere before invoking this function instead. */
+  srand(666);
+
+  xh_table = calloc(nof_vars, sizeof(uint *));
+  if (!xh_table)
+    return NULL;
+
+  for (i = 0; i < nof_vars; ++i) {
+    xh_table[i] = calloc(nof_vals[i], sizeof(uint));
+    if (!xh_table[i]) {
+      /* free previously allocated rows on failure */
+      for (v = 0; v < i; ++v)
+        free(xh_table[v]);
+      free(xh_table);
+      return NULL;
+    }
+    for (v = 0; v < nof_vals[i]; ++v) {
+      xh_table[i][v] = (uint)((score_t)range * rand() / (RAND_MAX + 1.0));
+    }
+  }
+
+  return xh_table;
+}
+
+/* ------------------------------------------------------------------
+   Deallocate a table created by init_xh().  The implementation is very
+   small but placing it in the module keeps callers from duplicating
+   the two‑level free loop and centralises potential future changes.
+   ------------------------------------------------------------------ */
+
+void free_xh(int nof_vars, uint **xh_table)
+{
+  int i;
+  if (!xh_table)
+    return;
+
+  for (i = 0; i < nof_vars; ++i)
+    free(xh_table[i]);
+  free(xh_table);
 }
 

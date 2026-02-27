@@ -110,4 +110,40 @@ typedef struct xtab xtab;
 
  extern xentry* xadd(xtab* t, uint h, uchar* key, int klen, int* new);
 
+/* ------------------------------------------------------------------
+   Random hashing helper used by the local–scores module.  The original
+   implementation lived in get_local_scores.c but is more generally a
+   utility for generating a table of random values.  We expose it here
+   so other parts of the program can reuse it without dragging in the
+   entire scoring module.
+   ------------------------------------------------------------------ */
+
+/**
+ * @brief  Create a two‑dimensional array of random integers.
+ *
+ * Each variable `i` has `nof_vals[i]` possible values; for every
+ * such value a uniformly distributed integer in `[0,range)` is
+ * generated.  The memory is heap‑allocated and must be freed by the
+ * caller (matching code in get_local_scores.c).
+ *
+ * @param nof_vars  number of variables.
+ * @param nof_vals  array of length `nof_vars` giving value counts.
+ * @param range     upper bound for random values (exclusive).
+ * @return          pointer to newly allocated `uint**` table, or NULL
+ *                  if allocation fails.
+ */
+extern uint **init_xh(int nof_vars, int *nof_vals, int range);
+
+/**
+ * @brief Free a table previously allocated by init_xh().
+ *
+ * The function iterates over each row and releases it, then frees
+ * the top‑level array itself.  It is the caller's responsibility to
+ * pass the same `nof_vars` that was used when the table was created.
+ *
+ * @param nof_vars  number of rows in `xh_table`.
+ * @param xh_table  pointer returned by init_xh().
+ */
+extern void free_xh(int nof_vars, uint **xh_table);
+
 #endif
