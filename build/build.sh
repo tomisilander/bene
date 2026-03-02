@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# determine script and project roots so the script can be invoked from
+# either the build directory or the repository root.
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+SRCDIR="$ROOT_DIR/src"
+
+# change into build directory to avoid littering other folders with
+# temporary object and symlink files
+cd "$SCRIPT_DIR" || exit 1
+
 if [ ${1:-UNIX} == "WIN" ]; then
     CC="i586-mingw32msvc-gcc"
     EXT=".exe"
@@ -14,10 +24,12 @@ fi
 # CFLAGS="-Wall -O3 -g -pg"
 CFLAGS="-Wall  -O3"
 
-BINDIR=../bin
-mkdir -p $BINDIR
+BINDIR="$ROOT_DIR/bin"
+mkdir -p "$BINDIR"
 
-ln -fs ../src/*.h ../src/*.c .
+# create symlinks to source files in build directory so that the
+# compilation commands (which refer to bare filenames) still work.
+ln -fs "$SRCDIR"/*.h "$SRCDIR"/*.c .
 
 $CC $CFLAGS -c -o files.o files.c
 $CC $CFLAGS -c -o varpar.o varpar.c
@@ -44,3 +56,4 @@ $CC $CFLAGS -o $BINDIR/gen_prior_file$EXT gen_prior_file.c gopt.o -lm
 $CC $CFLAGS -o $BINDIR/force_arc$EXT force_arc.c files.o
 
 cp -p tobin/* $BINDIR
+./clean.sh
