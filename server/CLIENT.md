@@ -1,5 +1,11 @@
 # bene server — client guide
 
+| | |
+|--|--|
+| **Document date** | 2026-04-02 |
+| **bene-server package** | 0.1.0 |
+| **Source revision** | `e870e16` (branch `feature/bn-learning-server`; no release tag yet) |
+
 This document describes how a **client application** (script, service, or UI) should call the bene HTTP API to run exact Bayesian network structure learning on a **variable subset** with optional arc constraints.
 
 The server exposes **OpenAPI** metadata. With the server running, open **`/docs`** (Swagger UI) or **`/openapi.json`** for an interactive schema and “try it” forms.
