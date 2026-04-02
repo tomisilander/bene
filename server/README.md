@@ -47,7 +47,8 @@ Or: `bene-server` (same defaults as `main`).
 - `GET /v1/info` — binary path, upload limits, TTL, staging directory.
 - `POST /v1/datasets` — multipart form: fields `vd` and `data` (files). Returns `dataset_id` and byte counts; **413** if combined size exceeds `BENE_MAX_UPLOAD_BYTES_TOTAL`.
 - `DELETE /v1/datasets/{dataset_id}` — remove a staged dataset before TTL (204 or 404).
-- `POST /v1/learn` — JSON body: either **`dataset_id`** (from upload) **or** **`vdfile` + `datafile`** (paths); plus `variables` (ordered global column indices), `score`, optional `required_arcs`, `forbidden_arcs`, `zeta`, `max_parents`.
+- `POST /v1/learn` — JSON body: either **`dataset_id`** (from upload) **or** **`vdfile` + `datafile`** (paths); plus `variables` (ordered global column indices), `score`, optional `required_arcs`, `forbidden_arcs`, `zeta`, `max_parents`. Response includes **`local_scores`** (per-node family scores; `parent_set` is learn-local bitmask).
+- `POST /v1/score-families` — score explicit `(child, parents)` families (global indices) without DP. The server batches families that share the same variable-set union into **one** `score_families` subprocess per union; **`applied_timeout_seconds`** is one wall-clock budget for the whole request (see **CLIENT.md**).
 
 Semantics match bene’s `-s` selfile and `-c` constraints: learning is over the **induced subgraph** on the selected columns only (see top-level plan).
 

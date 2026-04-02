@@ -181,7 +181,7 @@ Removes the staged files for `dataset_id` immediately (before TTL).
 |-------|------|-------------|
 | `applied_timeout_seconds` | number | Effective deadline used for this request (seconds): `min(server max_learn_seconds, timeout_seconds)` if you sent `timeout_seconds`, else the server cap. |
 | `score` | number | Total network score (bene `score_net` output). |
-| `local_scores` | array | One entry per node in local index order: `node_local`, `node_global`, `parent_set` (bene bitmask), `parents_local`, `parents_global`, `score` (family contribution). The sum of `score` matches `score` within floating-point tolerance. |
+| `local_scores` | array | One entry per node in local index order: `node_local`, `node_global`, `parent_set`, `parents_local`, `parents_global`, `score` (family contribution). The sum of `score` matches `score` within floating-point tolerance. **`parent_set`:** unsigned integer; bit `j` is set iff local index `j` (position `j` in the request `variables` array) is a parent of `node_local`. This bitmask is **only** in learn-local space (`0 … k-1`), not over raw dataset column ids. |
 | `arcs_global` | array of `{ "src": int, "dst": int }` | Edges in **global** column indices. |
 | `arcs_local` | array of `{ "src": int, "dst": int }` | Same edges in **local** indices (0 … `len(variables)-1`). |
 | `work_dir` | string or null | Present only if server debug flag keeps pipeline temp dirs (normally `null`). |
@@ -220,7 +220,12 @@ curl -sS -X POST "${BASE}/v1/learn" \
 
 ## `POST /v1/score-families`
 
-Scores **explicit** directed families **without** running structure search. For each item, the server builds a **minimal** variable set `sorted({child} ∪ parents)`, runs the same decomposable scorers as bene, and returns one score per family. Use this to evaluate an initial random graph, a tree, or arbitrary local parents before or outside global search.
+Scores **explicit** directed families **without** running structure search. For each item, the server builds a **minimal** variable set `sorted({child} ∪ parents)` (global column indices), runs the same decomposable scorers as bene, and returns one score per family. Use this to evaluate an initial random graph, a tree, or arbitrary local parents before or outside global search.
+
+### Batching and I/O (implementation)
+
+- The server **groups** families by that minimal sorted union. Each distinct union is scored in **one** `score_families` subprocess: **`init_globals` once**, then one stdin line per family sharing that union (same behavior as the CLI binary). So **N families with the same union** cost **one** data load; **N families with N distinct unions** cost up to **N** loads (unavoidable without changing bene’s init model).
+- **`applied_timeout_seconds`** is a **single** wall-clock budget for the **entire** HTTP request (min of server cap and optional `timeout_seconds`). The remaining time is shared across subprocesses; it is **not** “timeout × number of families.”
 
 ### Request (JSON)
 
@@ -236,8 +241,12 @@ Same data source as `/v1/learn`: **`dataset_id`** **or** **`vdfile` + `datafile`
 
 | Field | Description |
 |-------|-------------|
-| `applied_timeout_seconds` | Deadline used per family subprocess. |
-| `scores` | One object per family in request order: `child_local`, `child_global`, `parents_local`, `parents_global`, `score`. |
+| `applied_timeout_seconds` | One deadline (seconds) for scoring **all** families in this request (see above). |
+| `scores` | One object per family in request order: `child_local`, `child_global`, `parents_local`, `parents_global`, `score`. **`child_local` / `parents_local`** are in **minimal-union** order (indices `0 … \|union\|-1` after sorting global ids), which differs from learn-local indices unless the union equals the full learned set. |
+
+### Parity with `/v1/learn`
+
+For the same `score`, dataset, and `variables` list as a learn run, the `score` for row `i` in `local_scores` should match `POST /v1/score-families` with a single family `{ "child": node_global, "parents": parents_global }` from that row (same globals as in the learn response). Regression tests assert this up to floating-point tolerance.
 
 ---
 
@@ -251,7 +260,7 @@ Common HTTP status codes:
 | **404** | `dataset_id` not found on server (expired or deleted). |
 | **413** | Multipart upload exceeds `max_upload_bytes_total`. |
 | **422** | Request body failed schema validation (FastAPI / Pydantic). |
-| **504** | Learn exceeded the effective deadline (server `max_learn_seconds` and/or request `timeout_seconds`). |
+| **504** | Learn or **`/v1/score-families`** exceeded the effective deadline (server `max_learn_seconds` and/or request `timeout_seconds`). |
 | **500** | Missing bene binaries, logreg file, or pipeline failure (see `detail` message). |
 
 Error bodies are usually JSON with a **`detail`** field (string or list of validation errors).

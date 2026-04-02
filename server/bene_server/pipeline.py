@@ -7,6 +7,7 @@ import multiprocessing
 import os
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -299,6 +300,97 @@ def run_subgraph_pipeline_deadline(deadline_seconds: float, **kwargs: Any) -> Pi
     raise RuntimeError(payload)
 
 
+def score_families_batch(
+    *,
+    vd_path: Path,
+    data_path: Path,
+    score: str,
+    families: list[tuple[int, list[int]]],
+    bin_dir: Path,
+    logreg_path: Path,
+    deadline: float | None,
+) -> list[float]:
+    """
+    Score families in request order using ``score_families``. Families that share
+    the same sorted global variable union are scored in **one** subprocess (one
+    ``init_globals`` / data load). Distinct unions run as separate subprocesses,
+    in arbitrary order, sharing a single monotonic ``deadline`` for the whole batch.
+    """
+    exe = bin_dir / "score_families"
+    if not os.access(exe, os.X_OK):
+        raise FileNotFoundError(f"Missing or non-executable: {exe}")
+
+    n = len(families)
+    results: list[float] = [0.0] * n
+
+    # union_key -> [(request_index, child_local, parent_mask), ...]
+    groups: dict[tuple[int, ...], list[tuple[int, int, int]]] = {}
+    for idx, (child_global, parents_global) in enumerate(families):
+        union = sorted(set(parents_global) | {child_global})
+        if len(union) > 64:
+            raise ValueError("a family may have at most 64 variables")
+        g2l = {g: i for i, g in enumerate(union)}
+        child_l = g2l[child_global]
+        mask = 0
+        for p in parents_global:
+            mask |= 1 << g2l[p]
+        union_key = tuple(union)
+        if union_key not in groups:
+            groups[union_key] = []
+        groups[union_key].append((idx, child_l, mask))
+
+    for union, triples in groups.items():
+        timeout_sec = None
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(cmd=str(exe), timeout=0)
+            timeout_sec = remaining
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".sel",
+            delete=False,
+            encoding="ascii",
+        ) as sf:
+            for v in union:
+                sf.write(f"{v}\n")
+            selfile_path = Path(sf.name)
+
+        input_lines = "\n".join(f"{cl} {m}" for _, cl, m in triples) + "\n"
+        try:
+            proc = subprocess.run(
+                [
+                    str(exe),
+                    str(vd_path),
+                    str(data_path),
+                    score,
+                    str(selfile_path),
+                    "-l",
+                    str(logreg_path),
+                ],
+                input=input_lines,
+                text=True,
+                capture_output=True,
+                timeout=timeout_sec,
+                check=False,
+            )
+            if proc.returncode != 0:
+                err = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
+                raise RuntimeError(f"score_families failed: {err}")
+            out_lines = proc.stdout.strip().splitlines()
+            if len(out_lines) != len(triples):
+                raise RuntimeError(
+                    f"score_families expected {len(triples)} scores, got {len(out_lines)}",
+                )
+            for (req_i, _, _), line in zip(triples, out_lines, strict=True):
+                results[req_i] = float(line.strip())
+        finally:
+            selfile_path.unlink(missing_ok=True)
+
+    return results
+
+
 def score_single_family(
     *,
     vd_path: Path,
@@ -314,55 +406,19 @@ def score_single_family(
     Score one family using the ``score_families`` binary (minimal ``selfile`` =
     sorted union of child and parents).
     """
-    exe = bin_dir / "score_families"
-    if not os.access(exe, os.X_OK):
-        raise FileNotFoundError(f"Missing or non-executable: {exe}")
-
-    union = sorted(set(parents_global) | {child_global})
-    if len(union) > 64:
-        raise ValueError("a family may have at most 64 variables")
-
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".sel",
-        delete=False,
-        encoding="ascii",
-    ) as sf:
-        for v in union:
-            sf.write(f"{v}\n")
-        selfile_path = Path(sf.name)
-
-    try:
-        child_l = union.index(child_global)
-        mask = 0
-        for p in parents_global:
-            mask |= 1 << union.index(p)
-        line = f"{child_l} {mask}\n"
-        proc = subprocess.run(
-            [
-                str(exe),
-                str(vd_path),
-                str(data_path),
-                score,
-                str(selfile_path),
-                "-l",
-                str(logreg_path),
-            ],
-            input=line,
-            text=True,
-            capture_output=True,
-            timeout=timeout_sec,
-            check=False,
-        )
-        if proc.returncode != 0:
-            err = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
-            raise RuntimeError(f"score_families failed: {err}")
-        out_line = proc.stdout.strip().splitlines()
-        if not out_line:
-            raise RuntimeError("score_families produced no output")
-        return float(out_line[0].strip())
-    finally:
-        selfile_path.unlink(missing_ok=True)
+    deadline = None
+    if timeout_sec is not None:
+        deadline = time.monotonic() + float(timeout_sec)
+    batch = score_families_batch(
+        vd_path=vd_path,
+        data_path=data_path,
+        score=score,
+        families=[(child_global, parents_global)],
+        bin_dir=bin_dir,
+        logreg_path=logreg_path,
+        deadline=deadline,
+    )
+    return batch[0]
 
 
 def enrich_learn_local_scores(

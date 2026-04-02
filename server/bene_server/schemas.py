@@ -92,7 +92,15 @@ class LocalScoreEntry(BaseModel):
 
     node_local: int = Field(..., description="Index into the request ``variables`` list")
     node_global: int = Field(..., description="Global column index")
-    parent_set: int = Field(..., description="Bene parent bitmask over local indices 0..k-1")
+    parent_set: int = Field(
+        ...,
+        description=(
+            "Parent set as an unsigned integer bitmask in **learn-local** space only: "
+            "bit j (0 ≤ j < k) is 1 iff the variable at local index j is a parent of "
+            "``node_local``. ``k`` is ``len(variables)`` from the learn request. "
+            "This is **not** a bitmask over global column indices."
+        ),
+    )
     parents_local: list[int] = Field(..., description="Parent indices in local numbering")
     parents_global: list[int] = Field(..., description="Parent column indices (global)")
     score: float = Field(..., description="Local family score (decomposable contribution)")
@@ -184,9 +192,15 @@ class ScoreFamiliesRequest(BaseModel):
 class FamilyScoreResult(BaseModel):
     """Score for one requested family."""
 
-    child_local: int
+    child_local: int = Field(
+        ...,
+        description="Child index in **minimal-union** local order: ``sorted({child} ∪ parents)`` by global index.",
+    )
     child_global: int
-    parents_local: list[int]
+    parents_local: list[int] = Field(
+        ...,
+        description="Parent local indices in the same minimal union (not necessarily learn-local indices).",
+    )
     parents_global: list[int]
     score: float
 
@@ -194,5 +208,13 @@ class FamilyScoreResult(BaseModel):
 class ScoreFamiliesResponse(BaseModel):
     """Scores for each requested family (order matches ``families`` in the request)."""
 
-    applied_timeout_seconds: float
+    applied_timeout_seconds: float = Field(
+        ...,
+        description=(
+            "Single wall-clock budget (seconds) for scoring **all** families in this request: "
+            "min(server cap, optional ``timeout_seconds``). The server shares this deadline "
+            "across subprocesses; families with the same variable-set union are batched into "
+            "one ``score_families`` process (one data load per union)."
+        ),
+    )
     scores: list[FamilyScoreResult]

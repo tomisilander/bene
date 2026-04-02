@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import subprocess
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,7 +29,7 @@ from bene_server.pipeline import (
     enrich_learn_local_scores,
     globalize_arcs,
     run_subgraph_pipeline_deadline,
-    score_single_family,
+    score_families_batch,
 )
 from bene_server.schemas import (
     Arc,
@@ -304,19 +305,20 @@ async def score_families(body: ScoreFamiliesRequest) -> ScoreFamiliesResponse:
     async with _learn_semaphore:
 
         def _run_sf() -> list[FamilyScoreResult]:
+            fam_specs = [(fq.child, list(fq.parents)) for fq in body.families]
+            deadline = time.monotonic() + effective_timeout
+            scores = score_families_batch(
+                vd_path=vd_path,
+                data_path=data_path,
+                score=body.score,
+                families=fam_specs,
+                bin_dir=settings.bin_dir,
+                logreg_path=logreg,
+                deadline=deadline,
+            )
             out: list[FamilyScoreResult] = []
-            for fq in body.families:
+            for fq, s in zip(body.families, scores, strict=True):
                 union = sorted(set(fq.parents) | {fq.child})
-                s = score_single_family(
-                    vd_path=vd_path,
-                    data_path=data_path,
-                    score=body.score,
-                    child_global=fq.child,
-                    parents_global=list(fq.parents),
-                    bin_dir=settings.bin_dir,
-                    logreg_path=logreg,
-                    timeout_sec=effective_timeout,
-                )
                 g2l = {g: i for i, g in enumerate(union)}
                 out.append(
                     FamilyScoreResult(
@@ -340,7 +342,7 @@ async def score_families(body: ScoreFamiliesRequest) -> ScoreFamiliesResponse:
         except subprocess.TimeoutExpired as e:
             raise HTTPException(
                 status_code=504,
-                detail=f"score_families exceeded {effective_timeout}s",
+                detail=f"score_families batch exceeded {effective_timeout}s",
             ) from e
 
     return ScoreFamiliesResponse(
