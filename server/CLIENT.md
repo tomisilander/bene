@@ -4,7 +4,9 @@
 |--|--|
 | **Document date** | 2026-04-02 |
 | **bene-server package** | 0.1.0 |
-| **Source revision** | `e870e16` (branch `feature/bn-learning-server`; no release tag yet) |
+| **Branch** | `feature/bn-learning-server` (no git release tag yet) |
+
+To pin the **exact** server code alongside this document, record the bene repo commit you deploy (e.g. `git rev-parse --short HEAD` in the bene tree).
 
 This document describes how a **client application** (script, service, or UI) should call the bene HTTP API to run exact Bayesian network structure learning on a **variable subset** with optional arc constraints.
 
