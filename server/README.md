@@ -16,7 +16,11 @@ pip install -e .
 
 | Environment variable | Meaning |
 |---------------------|---------|
-| `BENE_ALLOWED_DATA_ROOTS` | **Required** for `/v1/learn`: comma-separated directory roots; `vdfile` and `datafile` must resolve under one of them. |
+| `BENE_ALLOWED_DATA_ROOTS` | **Required** for `/v1/learn` when using `vdfile`/`datafile` paths: comma-separated directory roots; both paths must resolve under one of them. **Not** required when using `dataset_id` from `POST /v1/datasets`. |
+| `BENE_DATASET_STAGING_DIR` | Where multipart uploads are stored (default: `<TMP>/bene-server-datasets`). |
+| `BENE_MAX_UPLOAD_BYTES_TOTAL` | Max combined size of vd + data in one upload (default 50_000_000). |
+| `BENE_DATASET_TTL_SECONDS` | Staged datasets older than this (by directory mtime) are deleted by a background task (default 86400). |
+| `BENE_CLEANUP_INTERVAL_SECONDS` | How often to run TTL cleanup (default 3600). |
 | `BENE_BIN_DIR` | Directory containing bene executables (default: `<repo>/bin`). |
 | `BENE_LOGREG_FILE` | Path to `logreg256x2000.bin` (default: `<bin>/logreg256x2000.bin`). |
 | `BENE_MAX_SUBGRAPH_VARS` | Maximum number of selected variables per request (default 32, max 64). |
@@ -37,10 +41,14 @@ Or: `bene-server` (same defaults as `main`).
 ## API
 
 - `GET /health` — liveness.
-- `GET /v1/info` — binary path and limits.
-- `POST /v1/learn` — JSON body: `vdfile`, `datafile`, `variables` (ordered global column indices), `score`, optional `required_arcs`, `forbidden_arcs`, `zeta`, `max_parents`.
+- `GET /v1/info` — binary path, upload limits, TTL, staging directory.
+- `POST /v1/datasets` — multipart form: fields `vd` and `data` (files). Returns `dataset_id` and byte counts; **413** if combined size exceeds `BENE_MAX_UPLOAD_BYTES_TOTAL`.
+- `DELETE /v1/datasets/{dataset_id}` — remove a staged dataset before TTL (204 or 404).
+- `POST /v1/learn` — JSON body: either **`dataset_id`** (from upload) **or** **`vdfile` + `datafile`** (paths); plus `variables` (ordered global column indices), `score`, optional `required_arcs`, `forbidden_arcs`, `zeta`, `max_parents`.
 
 Semantics match bene’s `-s` selfile and `-c` constraints: learning is over the **induced subgraph** on the selected columns only (see top-level plan).
+
+**Cleaning:** staged uploads are removed when their directory is older than `BENE_DATASET_TTL_SECONDS` (mtime), on a schedule (`BENE_CLEANUP_INTERVAL_SECONDS`), and once at startup. Clients can also `DELETE` explicitly.
 
 ## Concurrent jobs and storage
 
@@ -60,6 +68,5 @@ What actually limits throughput:
 ```sh
 cd server
 pip install -e ".[dev]"
-pytest tests/ -m "not integration"   # fast unit tests only
-pytest tests/ -m integration         # full pipeline (needs bene binaries in ../bin)
+pytest tests/                        # needs `pip install -e ".[dev]"` (httpx)
 ```

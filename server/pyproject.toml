@@ -9,6 +9,7 @@ dependencies = [
   "uvicorn[standard]>=0.27.0",
   "pydantic>=2.5.0",
   "pydantic-settings>=2.1.0",
+  "python-multipart>=0.0.6",
 ]
 
 [project.scripts]
@@ -25,6 +26,7 @@ include = ["bene_server*"]
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4.0",
+  "httpx>=0.26.0",
 ]
 
 [tool.pytest.ini_options]
