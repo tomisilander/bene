@@ -168,7 +168,7 @@ async def main_async(args: argparse.Namespace) -> int:
                     "variables": var_list(n),
                     "score": SCORE,
                 },
-                timeout=600.0,
+                timeout=7200.0,
             )
             elapsed = time.perf_counter() - t0
             if r.status_code != 200:

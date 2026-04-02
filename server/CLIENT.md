@@ -47,6 +47,7 @@ Use for load balancers and orchestration health checks.
 - `bin_dir` — where bene executables are expected on the server host.
 - `max_subgraph_vars` — maximum allowed length of `variables` in `/v1/learn`.
 - `max_concurrent_jobs` — how many learn jobs may run concurrently server-side.
+- `max_learn_seconds` — server cap on how long a single `POST /v1/learn` may run; longer work is stopped and returns **504** (see Timeouts below).
 - `allowed_data_roots_configured` — whether path-based `vdfile`/`datafile` learning is allowed (see below).
 - `dataset_staging_dir`, `max_upload_bytes_total`, `dataset_ttl_seconds`, `cleanup_interval_seconds` — upload staging and TTL behavior.
 
@@ -147,6 +148,7 @@ Removes the staged files for `dataset_id` immediately (before TTL).
 | `forbidden_arcs` | no | array of `[src, dst]` | Directed edges that **must not** appear, using **global** indices. |
 | `zeta` | no | boolean | Apply zeta transform before DP (default `false`). |
 | `max_parents` | no | integer | Optional cap on parent set size (bene `-m`). |
+| `timeout_seconds` | no | number | Optional client-side upper bound on learn duration (seconds). The effective deadline is **min(`timeout_seconds`, server `max_learn_seconds`)** from `/v1/info`. Omit to use only the server cap. |
 
 \* Provide **either** (`dataset_id`) **or** (`vdfile` + `datafile`), not both.
 
@@ -156,12 +158,19 @@ Removes the staged files for `dataset_id` immediately (before TTL).
 - **Global vs local indices:** `variables[i]` is global column `i`’s identity; position `i` in the array is **local index** `i`. Arcs in the response are given both as **`arcs_global`** (global column ids) and **`arcs_local`** (positions into the `variables` array).
 - **Constraints:** `required_arcs` / `forbidden_arcs` use **global** column indices. An edge must refer to variables present in `variables`; otherwise the server returns **400**.
 
+#### Timeouts (server cap and client preference)
+
+- The server enforces a **maximum learn duration** (`max_learn_seconds` in `/v1/info`, configurable with `BENE_MAX_LEARN_SECONDS`, default 3600). The learn runs in an isolated process that is **terminated** if it exceeds the effective deadline, and the HTTP response is **504**.
+- You may send **`timeout_seconds`** in the JSON body to set a **stricter** limit for that request (for example when experimenting). The deadline used is **min(server `max_learn_seconds`, `timeout_seconds`)** when `timeout_seconds` is set.
+- **Your HTTP client library** should use a **read timeout** at least as large as the deadline you expect (and at least as large as `timeout_seconds` or `max_learn_seconds`), or the client may close the connection before the server responds. Example (httpx): `httpx.post(..., timeout=httpx.Timeout(4000.0))` for a 3600 s server cap with margin.
+
 ### Response
 
 **200** with JSON:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `applied_timeout_seconds` | number | Effective deadline used for this request (seconds): `min(server max_learn_seconds, timeout_seconds)` if you sent `timeout_seconds`, else the server cap. |
 | `score` | number | Total network score (bene `score_net` output). |
 | `arcs_global` | array of `{ "src": int, "dst": int }` | Edges in **global** column indices. |
 | `arcs_local` | array of `{ "src": int, "dst": int }` | Same edges in **local** indices (0 … `len(variables)-1`). |
@@ -209,6 +218,7 @@ Common HTTP status codes:
 | **404** | `dataset_id` not found on server (expired or deleted). |
 | **413** | Multipart upload exceeds `max_upload_bytes_total`. |
 | **422** | Request body failed schema validation (FastAPI / Pydantic). |
+| **504** | Learn exceeded the effective deadline (server `max_learn_seconds` and/or request `timeout_seconds`). |
 | **500** | Missing bene binaries, logreg file, or pipeline failure (see `detail` message). |
 
 Error bodies are usually JSON with a **`detail`** field (string or list of validation errors).

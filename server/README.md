@@ -27,6 +27,7 @@ pip install -e .
 | `BENE_LOGREG_FILE` | Path to `logreg256x2000.bin` (default: `<bin>/logreg256x2000.bin`). |
 | `BENE_MAX_SUBGRAPH_VARS` | Maximum number of selected variables per request (default 32, max 64). |
 | `BENE_MAX_CONCURRENT_JOBS` | Concurrent pipeline runs (default 2). |
+| `BENE_MAX_LEARN_SECONDS` | Max wall time for one `POST /v1/learn`; child process is killed after this (default 3600). |
 | `BENE_DEBUG_WORKDIR` | Set to `1` to keep temp work directories (path returned in response). |
 | `BENE_HOST` / `BENE_PORT` | Bind address for `python -m bene_server.main` (default `127.0.0.1:8765`). |
 | `TMPDIR` | Standard temp directory for each job’s working directory (`tempfile`); point to fast local storage in production. |

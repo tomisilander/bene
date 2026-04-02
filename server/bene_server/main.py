@@ -22,7 +22,11 @@ from bene_server.datasets import (
     save_multipart_pair,
 )
 from bene_server.paths import PathPolicyError, resolve_allowed_file
-from bene_server.pipeline import globalize_arcs, run_subgraph_pipeline
+from bene_server.pipeline import (
+    PipelineTimeoutError,
+    globalize_arcs,
+    run_subgraph_pipeline_deadline,
+)
 from bene_server.schemas import Arc, DatasetUploadResponse, LearnRequest, LearnResponse
 
 logger = logging.getLogger(__name__)
@@ -85,6 +89,7 @@ class InfoResponse(BaseModel):
     bin_dir: str
     max_subgraph_vars: int
     max_concurrent_jobs: int
+    max_learn_seconds: float
     allowed_data_roots_configured: bool
     dataset_staging_dir: str
     max_upload_bytes_total: int
@@ -104,6 +109,7 @@ async def info() -> InfoResponse:
         bin_dir=str(settings.bin_dir.resolve()),
         max_subgraph_vars=settings.max_subgraph_vars,
         max_concurrent_jobs=settings.max_concurrent_jobs,
+        max_learn_seconds=settings.max_learn_seconds,
         allowed_data_roots_configured=len(roots) > 0,
         dataset_staging_dir=str(settings.dataset_staging_dir.resolve()),
         max_upload_bytes_total=settings.max_upload_bytes_total,
@@ -210,22 +216,40 @@ async def learn(body: LearnRequest) -> LearnResponse:
 
     keep_work = os.environ.get("BENE_DEBUG_WORKDIR", "") == "1"
 
+    effective_timeout = float(settings.max_learn_seconds)
+    if body.timeout_seconds is not None:
+        effective_timeout = min(effective_timeout, float(body.timeout_seconds))
+
+    pl_kwargs = dict(
+        vd_path=vd_path,
+        data_path=data_path,
+        global_vars=body.variables,
+        score=body.score,
+        required_arcs=body.required_arcs,
+        forbidden_arcs=body.forbidden_arcs,
+        bin_dir=settings.bin_dir,
+        logreg_path=logreg,
+        zeta=body.zeta,
+        max_parents=body.max_parents,
+        keep_workdir=keep_work,
+    )
+
     async with _learn_semaphore:
         try:
-            result = await asyncio.to_thread(
-                run_subgraph_pipeline,
-                vd_path=vd_path,
-                data_path=data_path,
-                global_vars=body.variables,
-                score=body.score,
-                required_arcs=body.required_arcs,
-                forbidden_arcs=body.forbidden_arcs,
-                bin_dir=settings.bin_dir,
-                logreg_path=logreg,
-                zeta=body.zeta,
-                max_parents=body.max_parents,
-                keep_workdir=keep_work,
-            )
+
+            def _run_learn():
+                return run_subgraph_pipeline_deadline(effective_timeout, **pl_kwargs)
+
+            result = await asyncio.to_thread(_run_learn)
+        except PipelineTimeoutError as e:
+            raise HTTPException(
+                status_code=504,
+                detail=(
+                    f"Learn exceeded deadline {e.deadline_seconds}s "
+                    f"(server max_learn_seconds={settings.max_learn_seconds}; "
+                    "client may set a lower timeout_seconds)"
+                ),
+            ) from e
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except FileNotFoundError as e:
@@ -237,6 +261,7 @@ async def learn(body: LearnRequest) -> LearnResponse:
     work_dir_str = str(result.work_dir) if result.work_dir is not None else None
 
     return LearnResponse(
+        applied_timeout_seconds=effective_timeout,
         score=result.score,
         arcs_global=[Arc(src=a, dst=b) for a, b in arcs_g],
         arcs_local=[Arc(src=a, dst=b) for a, b in result.arcs_local],

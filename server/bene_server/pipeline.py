@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -14,6 +16,14 @@ class PipelineResult:
     score: float
     arcs_local: list[tuple[int, int]]
     work_dir: Path | None
+
+
+class PipelineTimeoutError(Exception):
+    """Raised when the learn subprocess exceeds its wall-clock deadline."""
+
+    def __init__(self, deadline_seconds: float) -> None:
+        self.deadline_seconds = deadline_seconds
+        super().__init__(f"learn exceeded {deadline_seconds}s")
 
 
 def _run(
@@ -224,6 +234,54 @@ def run_subgraph_pipeline(
     finally:
         if tmp_ctx is not None:
             tmp_ctx.cleanup()
+
+
+def _pipeline_child(q: Any, kwargs: dict[str, Any]) -> None:
+    """Runs in a separate process so the parent can terminate the whole tree on timeout."""
+    try:
+        result = run_subgraph_pipeline(**kwargs)
+        q.put(("ok", result))
+    except ValueError as e:
+        q.put(("value_error", str(e)))
+    except FileNotFoundError as e:
+        q.put(("file_not_found", str(e)))
+    except RuntimeError as e:
+        q.put(("runtime_error", str(e)))
+    except BaseException as e:
+        q.put(("err", repr(e)))
+
+
+def run_subgraph_pipeline_deadline(deadline_seconds: float, **kwargs: Any) -> PipelineResult:
+    """
+    Run :func:`run_subgraph_pipeline` in a child process; terminate if it runs past ``deadline_seconds``.
+
+    Uses ``spawn`` so the worker does not inherit the async server’s threads.
+    """
+    ctx = multiprocessing.get_context("spawn")
+    q = ctx.Queue()
+    proc = ctx.Process(target=_pipeline_child, args=(q, kwargs))
+    proc.start()
+    proc.join(deadline_seconds)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(10)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(5)
+        raise PipelineTimeoutError(deadline_seconds)
+    if q.empty():
+        code = proc.exitcode
+        raise RuntimeError(f"pipeline process exited with code {code} and no result")
+    kind, payload = q.get()
+    if kind == "ok":
+        return payload
+    if kind == "value_error":
+        raise ValueError(payload)
+    if kind == "file_not_found":
+        raise FileNotFoundError(payload)
+    if kind == "runtime_error":
+        raise RuntimeError(payload)
+    raise RuntimeError(payload)
 
 
 def globalize_arcs(

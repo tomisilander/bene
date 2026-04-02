@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     )
     max_subgraph_vars: int = Field(default=32, ge=1, le=64, description="Maximum |S| per request")
     max_concurrent_jobs: int = Field(default=2, ge=1, description="Concurrent pipeline runs")
+    max_learn_seconds: float = Field(
+        default=3600.0,
+        ge=1.0,
+        description="Server-wide cap on POST /v1/learn wall time (child process terminated if exceeded)",
+    )
 
     def resolved_logreg(self) -> Path:
         path = self.logreg_file or (self.bin_dir / "logreg256x2000.bin")

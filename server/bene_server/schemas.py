@@ -31,6 +31,10 @@ class LearnRequest(BaseModel):
     )
     zeta: bool = Field(default=False, description="Apply zeta transform before DP")
     max_parents: int | None = Field(default=None, ge=1, description="Optional -m for get_local_scores")
+    timeout_seconds: float | None = Field(
+        default=None,
+        description="Client max wait for this learn (seconds); capped by server max_learn_seconds",
+    )
 
     @field_validator("variables")
     @classmethod
@@ -40,6 +44,15 @@ class LearnRequest(BaseModel):
             if x in seen:
                 raise ValueError("variables must be unique")
             seen.add(x)
+        return v
+
+    @field_validator("timeout_seconds")
+    @classmethod
+    def timeout_positive(cls, v: float | None) -> float | None:
+        if v is None:
+            return None
+        if v <= 0:
+            raise ValueError("timeout_seconds must be positive when set")
         return v
 
     @model_validator(mode="after")
@@ -77,6 +90,10 @@ class DatasetUploadResponse(BaseModel):
 class LearnResponse(BaseModel):
     """Learned structure and decomposable score."""
 
+    applied_timeout_seconds: float = Field(
+        ...,
+        description="Deadline used for this run (min of client timeout and server max)",
+    )
     score: float = Field(..., description="Total network score from score_net")
     arcs_global: list[Arc] = Field(
         ...,
