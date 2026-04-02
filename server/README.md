@@ -65,6 +65,19 @@ What actually limits throughput:
 
 **Operational guidance:** set `TMPDIR` (or mount a dedicated scratch path) to a **local**, fast, **dedicated** directory on each machine; size the queue so aggregate disk throughput stays below what the disk can sustain; avoid putting temp work on a shared home directory over NFS for heavy workloads.
 
+## Benchmark (CLI vs HTTP)
+
+Script [`scripts/benchmark_datain.py`](scripts/benchmark_datain.py) compares sequential **`bin/data2net.sh`** time to **`POST /v1/learn`** wall time with **`BENE_MAX_CONCURRENT_JOBS=2`**. By default it includes only datasets whose `.vd` has **at most 17 variables** (use `--max-vars` to change).
+
+```sh
+cd server
+pip install -e ".[dev]"   # httpx
+export DATAIN=~/datain
+export BENE_HOME=/path/to/bene   # repo root with bin/
+python scripts/benchmark_datain.py --max-vars 17 --only iris,ecoli,liver,wine,voting
+# or: --limit 10   (first 10 names after sort; can include slow sets like adult)
+```
+
 ## Tests
 
 ```sh
