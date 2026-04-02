@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ class PipelineResult:
     score: float
     arcs_local: list[tuple[int, int]]
     work_dir: Path | None
+    local_scores: list[dict[str, Any]] = field(default_factory=list)
 
 
 class PipelineTimeoutError(Exception):
@@ -137,6 +139,7 @@ def run_subgraph_pipeline(
         "get_best_order",
         "get_best_net",
         "score_net",
+        "net_local_scores",
     ):
         exe = bin_dir / name
         if not os.access(exe, os.X_OK):
@@ -225,11 +228,23 @@ def run_subgraph_pipeline(
 
         arcs_local = _parse_arcs_local(net2parents, parents2arcs, work_path / "net")
 
+        nls = subprocess.run(
+            [str(bin_dir / "net_local_scores"), str(work_path / "net"), str(work_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if nls.returncode != 0:
+            err = nls.stderr.strip() or nls.stdout.strip()
+            raise RuntimeError(f"net_local_scores failed: {err}")
+        local_raw = json.loads(nls.stdout.strip())
+
         work_dir_out: Path | None = work_path if keep_workdir else None
         return PipelineResult(
             score=total_score,
             arcs_local=arcs_local,
             work_dir=work_dir_out,
+            local_scores=local_raw,
         )
     finally:
         if tmp_ctx is not None:
@@ -282,6 +297,96 @@ def run_subgraph_pipeline_deadline(deadline_seconds: float, **kwargs: Any) -> Pi
     if kind == "runtime_error":
         raise RuntimeError(payload)
     raise RuntimeError(payload)
+
+
+def score_single_family(
+    *,
+    vd_path: Path,
+    data_path: Path,
+    score: str,
+    child_global: int,
+    parents_global: list[int],
+    bin_dir: Path,
+    logreg_path: Path,
+    timeout_sec: float | None,
+) -> float:
+    """
+    Score one family using the ``score_families`` binary (minimal ``selfile`` =
+    sorted union of child and parents).
+    """
+    exe = bin_dir / "score_families"
+    if not os.access(exe, os.X_OK):
+        raise FileNotFoundError(f"Missing or non-executable: {exe}")
+
+    union = sorted(set(parents_global) | {child_global})
+    if len(union) > 64:
+        raise ValueError("a family may have at most 64 variables")
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".sel",
+        delete=False,
+        encoding="ascii",
+    ) as sf:
+        for v in union:
+            sf.write(f"{v}\n")
+        selfile_path = Path(sf.name)
+
+    try:
+        child_l = union.index(child_global)
+        mask = 0
+        for p in parents_global:
+            mask |= 1 << union.index(p)
+        line = f"{child_l} {mask}\n"
+        proc = subprocess.run(
+            [
+                str(exe),
+                str(vd_path),
+                str(data_path),
+                score,
+                str(selfile_path),
+                "-l",
+                str(logreg_path),
+            ],
+            input=line,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+            check=False,
+        )
+        if proc.returncode != 0:
+            err = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
+            raise RuntimeError(f"score_families failed: {err}")
+        out_line = proc.stdout.strip().splitlines()
+        if not out_line:
+            raise RuntimeError("score_families produced no output")
+        return float(out_line[0].strip())
+    finally:
+        selfile_path.unlink(missing_ok=True)
+
+
+def enrich_learn_local_scores(
+    raw: list[dict[str, Any]],
+    global_vars: list[int],
+) -> list[dict[str, Any]]:
+    """Turn ``net_local_scores`` JSON rows into API records with parent lists."""
+    out: list[dict[str, Any]] = []
+    k = len(global_vars)
+    for row in raw:
+        nl = int(row["node"])
+        ps = int(row["parent_set"])
+        parents_local = [j for j in range(k) if j != nl and (ps & (1 << j))]
+        out.append(
+            {
+                "node_local": nl,
+                "node_global": global_vars[nl],
+                "parent_set": ps,
+                "parents_local": parents_local,
+                "parents_global": [global_vars[j] for j in parents_local],
+                "score": float(row["score"]),
+            }
+        )
+    return out
 
 
 def globalize_arcs(

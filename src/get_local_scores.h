@@ -12,4 +12,6 @@ extern score_t get_nof_cfgs(varset_t vs);
 typedef score_t (*scorefun) (int, varset_t, int);
 typedef void (*scorefree) ();
 
+score_t bene_score_single_family_after_init(int child_local, varset_t parent_mask);
+
 #endif

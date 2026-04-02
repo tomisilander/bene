@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,10 +25,21 @@ from bene_server.datasets import (
 from bene_server.paths import PathPolicyError, resolve_allowed_file
 from bene_server.pipeline import (
     PipelineTimeoutError,
+    enrich_learn_local_scores,
     globalize_arcs,
     run_subgraph_pipeline_deadline,
+    score_single_family,
 )
-from bene_server.schemas import Arc, DatasetUploadResponse, LearnRequest, LearnResponse
+from bene_server.schemas import (
+    Arc,
+    DatasetUploadResponse,
+    FamilyScoreResult,
+    LearnRequest,
+    LearnResponse,
+    LocalScoreEntry,
+    ScoreFamiliesRequest,
+    ScoreFamiliesResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +146,7 @@ def _validate_arc_lists(
             raise HTTPException(status_code=400, detail=f"Self-loop not allowed: ({s}, {d})")
 
 
-def _resolve_vd_data_paths(body: LearnRequest) -> tuple[Path, Path]:
+def _resolve_vd_data_paths(body: LearnRequest | ScoreFamiliesRequest) -> tuple[Path, Path]:
     if body.dataset_id is not None and str(body.dataset_id).strip():
         ds = str(body.dataset_id).strip()
         try:
@@ -260,12 +272,80 @@ async def learn(body: LearnRequest) -> LearnResponse:
     arcs_g = globalize_arcs(result.arcs_local, body.variables)
     work_dir_str = str(result.work_dir) if result.work_dir is not None else None
 
+    local_rows = enrich_learn_local_scores(result.local_scores, body.variables)
+    local_entries = [LocalScoreEntry(**row) for row in local_rows]
+
     return LearnResponse(
         applied_timeout_seconds=effective_timeout,
         score=result.score,
+        local_scores=local_entries,
         arcs_global=[Arc(src=a, dst=b) for a, b in arcs_g],
         arcs_local=[Arc(src=a, dst=b) for a, b in result.arcs_local],
         work_dir=work_dir_str,
+    )
+
+
+@app.post("/v1/score-families", response_model=ScoreFamiliesResponse)
+async def score_families(body: ScoreFamiliesRequest) -> ScoreFamiliesResponse:
+    """Decomposable family scores for given (child, parents) pairs (global column indices)."""
+    vd_path, data_path = _resolve_vd_data_paths(body)
+
+    logreg = settings.resolved_logreg()
+    if not logreg.is_file():
+        raise HTTPException(
+            status_code=500,
+            detail=f"logreg file not found: {logreg} (set BENE_LOGREG_FILE or build bene)",
+        )
+
+    effective_timeout = float(settings.max_learn_seconds)
+    if body.timeout_seconds is not None:
+        effective_timeout = min(effective_timeout, float(body.timeout_seconds))
+
+    async with _learn_semaphore:
+
+        def _run_sf() -> list[FamilyScoreResult]:
+            out: list[FamilyScoreResult] = []
+            for fq in body.families:
+                union = sorted(set(fq.parents) | {fq.child})
+                s = score_single_family(
+                    vd_path=vd_path,
+                    data_path=data_path,
+                    score=body.score,
+                    child_global=fq.child,
+                    parents_global=list(fq.parents),
+                    bin_dir=settings.bin_dir,
+                    logreg_path=logreg,
+                    timeout_sec=effective_timeout,
+                )
+                g2l = {g: i for i, g in enumerate(union)}
+                out.append(
+                    FamilyScoreResult(
+                        child_local=g2l[fq.child],
+                        child_global=fq.child,
+                        parents_local=[g2l[p] for p in sorted(fq.parents)],
+                        parents_global=sorted(fq.parents),
+                        score=s,
+                    )
+                )
+            return out
+
+        try:
+            results = await asyncio.to_thread(_run_sf)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        except subprocess.TimeoutExpired as e:
+            raise HTTPException(
+                status_code=504,
+                detail=f"score_families exceeded {effective_timeout}s",
+            ) from e
+
+    return ScoreFamiliesResponse(
+        applied_timeout_seconds=effective_timeout,
+        scores=results,
     )
 
 

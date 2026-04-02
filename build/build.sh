@@ -45,6 +45,9 @@ $CC $CFLAGS -o $BINDIR/get_best_sinks$EXT get_best_sinks.c files.o
 $CC $CFLAGS -o $BINDIR/get_best_order$EXT get_best_order.c
 $CC $CFLAGS -o $BINDIR/get_best_net$EXT get_best_net.c files.o varpar.o
 $CC $CFLAGS -o $BINDIR/score_net$EXT score_net.c files.o varpar.o
+$CC $CFLAGS -o $BINDIR/net_local_scores$EXT net_local_scores.c files.o varpar.o
+$CC $CFLAGS -DNO_MAIN_GET_LOCAL_SCORES -c -o get_local_scores_nom.o get_local_scores.c
+$CC $CFLAGS -o $BINDIR/score_families$EXT score_families.c get_local_scores_nom.o files.c reg.c ilogi.c ls_XIC.c ls_fNML.c ls_qNML.c ls_BDe.c ls_LOO.c ls_BDq.c gopt.o xtab.o -lm
 $CC $CFLAGS -o $BINDIR/score_nets$EXT score_nets.c files.o varpar.o
 $CC $CFLAGS -o $BINDIR/score_netsets$EXT score_netsets.c files.o varpar.o -lm
 $CC $CFLAGS -o $BINDIR/net2parents$EXT net2parents.c 

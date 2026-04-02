@@ -658,6 +658,43 @@ void scores(int len_vs, varset_t vs)
   }
 }
 
+score_t bene_score_single_family_after_init(int child_local, varset_t parent_mask)
+{
+  int len_vs = nof_vars;
+  int nof_parents = len_vs - 1;
+  varset_t full = LARGEST_SET(nof_vars);
+  varset_t iset = SINGLETON(child_local);
+
+  if (child_local < 0 || child_local >= nof_vars)
+  {
+    fprintf(stderr, "bene_score_single_family_after_init: child_local out of range\n");
+    return (score_t)MIN_NODE_SCORE;
+  }
+  if (parent_mask & iset)
+  {
+    fprintf(stderr, "bene_score_single_family_after_init: parent_mask must not include child bit\n");
+    return (score_t)MIN_NODE_SCORE;
+  }
+  if ((parent_mask | iset) != full)
+  {
+    fprintf(stderr,
+            "bene_score_single_family_after_init: union of child and parents must equal full "
+            "selected set (selfile)\n");
+    return (score_t)MIN_NODE_SCORE;
+  }
+  if (!save_all_scores && nof_parents > max_parents)
+    return (score_t)MIN_NODE_SCORE;
+  if (musts != NULL &&
+      (((musts[child_local] & parent_mask) != musts[child_local]) ||
+       ((nopes[child_local] & parent_mask) != 0)))
+    return (score_t)MIN_NODE_SCORE;
+
+  {
+    int nof_freqs = contab2condtab(child_local, len_vs);
+    return scorer(child_local, parent_mask, nof_freqs) - use_MU * LOG2 * nof_parents;
+  }
+}
+
 void walk_contabs(int len_vs, varset_t vs, int first_out_ix)
 {
 
@@ -719,6 +756,7 @@ varset_t task_index2varset(int nof_taskvars, int task_index)
   return (~fixvars) & allvars;
 }
 
+#ifndef NO_MAIN_GET_LOCAL_SCORES
 int main(int argc, char *argv[])
 {
 
@@ -828,3 +866,4 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+#endif /* NO_MAIN_GET_LOCAL_SCORES */

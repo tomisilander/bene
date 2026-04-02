@@ -87,6 +87,17 @@ class DatasetUploadResponse(BaseModel):
     )
 
 
+class LocalScoreEntry(BaseModel):
+    """Per-node family score for the learned network (same ordering as bene ``net`` / work dir)."""
+
+    node_local: int = Field(..., description="Index into the request ``variables`` list")
+    node_global: int = Field(..., description="Global column index")
+    parent_set: int = Field(..., description="Bene parent bitmask over local indices 0..k-1")
+    parents_local: list[int] = Field(..., description="Parent indices in local numbering")
+    parents_global: list[int] = Field(..., description="Parent column indices (global)")
+    score: float = Field(..., description="Local family score (decomposable contribution)")
+
+
 class LearnResponse(BaseModel):
     """Learned structure and decomposable score."""
 
@@ -95,6 +106,10 @@ class LearnResponse(BaseModel):
         description="Deadline used for this run (min of client timeout and server max)",
     )
     score: float = Field(..., description="Total network score from score_net")
+    local_scores: list[LocalScoreEntry] = Field(
+        ...,
+        description="Per-node local scores for the returned DAG (sum equals ``score`` up to float noise)",
+    )
     arcs_global: list[Arc] = Field(
         ...,
         description="Directed edges using global column indices from the request",
@@ -107,3 +122,77 @@ class LearnResponse(BaseModel):
         default=None,
         description="Temp directory used for this run (only if BENE_DEBUG_WORKDIR=1)",
     )
+
+
+class FamilyQuery(BaseModel):
+    """One family: child variable and its parent set (global column indices)."""
+
+    child: int = Field(..., description="Global column index of the child variable")
+    parents: list[int] = Field(
+        default_factory=list,
+        description="Global column indices of parents (subset of ``variables``, must not include ``child``)",
+    )
+
+
+class ScoreFamiliesRequest(BaseModel):
+    """Score specific (child, parents) families (no structure search). Each family uses a minimal variable set."""
+
+    dataset_id: str | None = None
+    vdfile: str | None = None
+    datafile: str | None = None
+    score: str = Field(..., description="Decomposable score name, e.g. BIC")
+    families: list[FamilyQuery] = Field(..., min_length=1)
+    timeout_seconds: float | None = Field(
+        default=None,
+        description="Optional client cap; combined with server max_learn_seconds",
+    )
+
+    @field_validator("timeout_seconds")
+    @classmethod
+    def timeout_positive_sf(cls, v: float | None) -> float | None:
+        if v is None:
+            return None
+        if v <= 0:
+            raise ValueError("timeout_seconds must be positive when set")
+        return v
+
+    @model_validator(mode="after")
+    def dataset_or_paths_sf(self):
+        has_id = self.dataset_id is not None and str(self.dataset_id).strip() != ""
+        has_paths = (self.vdfile is not None and str(self.vdfile).strip() != "") and (
+            self.datafile is not None and str(self.datafile).strip() != ""
+        )
+        if has_id and has_paths:
+            raise ValueError("Provide either dataset_id or vdfile/datafile, not both")
+        if not has_id and not has_paths:
+            raise ValueError("Provide dataset_id or both vdfile and datafile")
+        return self
+
+    @model_validator(mode="after")
+    def families_disjoint_union(self):
+        for fq in self.families:
+            if fq.child in fq.parents:
+                raise ValueError("parents must not include child")
+            dup = set()
+            for p in fq.parents:
+                if p in dup:
+                    raise ValueError("duplicate parent in family")
+                dup.add(p)
+        return self
+
+
+class FamilyScoreResult(BaseModel):
+    """Score for one requested family."""
+
+    child_local: int
+    child_global: int
+    parents_local: list[int]
+    parents_global: list[int]
+    score: float
+
+
+class ScoreFamiliesResponse(BaseModel):
+    """Scores for each requested family (order matches ``families`` in the request)."""
+
+    applied_timeout_seconds: float
+    scores: list[FamilyScoreResult]

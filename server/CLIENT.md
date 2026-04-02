@@ -32,7 +32,8 @@ The server exposes **OpenAPI** metadata. With the server running, open **`/docs`
 | `GET` | `/v1/info` | Server limits and configuration (read-only) |
 | `POST` | `/v1/datasets` | Upload variable description + data files (multipart) |
 | `DELETE` | `/v1/datasets/{dataset_id}` | Remove a staged upload before TTL |
-| `POST` | `/v1/learn` | Run structure learning (JSON) |
+| `POST` | `/v1/learn` | Run structure learning (JSON); response includes per-node local scores |
+| `POST` | `/v1/score-families` | Score explicit (child, parents) families (no DP search) |
 
 ---
 
@@ -180,6 +181,7 @@ Removes the staged files for `dataset_id` immediately (before TTL).
 |-------|------|-------------|
 | `applied_timeout_seconds` | number | Effective deadline used for this request (seconds): `min(server max_learn_seconds, timeout_seconds)` if you sent `timeout_seconds`, else the server cap. |
 | `score` | number | Total network score (bene `score_net` output). |
+| `local_scores` | array | One entry per node in local index order: `node_local`, `node_global`, `parent_set` (bene bitmask), `parents_local`, `parents_global`, `score` (family contribution). The sum of `score` matches `score` within floating-point tolerance. |
 | `arcs_global` | array of `{ "src": int, "dst": int }` | Edges in **global** column indices. |
 | `arcs_local` | array of `{ "src": int, "dst": int }` | Same edges in **local** indices (0 … `len(variables)-1`). |
 | `work_dir` | string or null | Present only if server debug flag keeps pipeline temp dirs (normally `null`). |
@@ -213,6 +215,29 @@ curl -sS -X POST "${BASE}/v1/learn" \
     \"score\": \"BIC\"
   }"
 ```
+
+---
+
+## `POST /v1/score-families`
+
+Scores **explicit** directed families **without** running structure search. For each item, the server builds a **minimal** variable set `sorted({child} ∪ parents)`, runs the same decomposable scorers as bene, and returns one score per family. Use this to evaluate an initial random graph, a tree, or arbitrary local parents before or outside global search.
+
+### Request (JSON)
+
+Same data source as `/v1/learn`: **`dataset_id`** **or** **`vdfile` + `datafile`**.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `score` | yes | e.g. `BIC`, `AIC`, … |
+| `families` | yes | Array of `{ "child": <global int>, "parents": [<global int>, ...] }`. Parents must not include `child`. Each family is scored over **exactly** `child ∪ parents` (no extra columns). |
+| `timeout_seconds` | no | Capped by server `max_learn_seconds` (same semantics as `/v1/learn`). |
+
+### Response
+
+| Field | Description |
+|-------|-------------|
+| `applied_timeout_seconds` | Deadline used per family subprocess. |
+| `scores` | One object per family in request order: `child_local`, `child_global`, `parents_local`, `parents_global`, `score`. |
 
 ---
 
