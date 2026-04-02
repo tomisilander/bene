@@ -2,6 +2,8 @@
 
 Phase A orchestration: runs the existing `bin/` pipeline on a variable subset with optional arc constraints.
 
+**Client integration:** see **[CLIENT.md](CLIENT.md)** for HTTP endpoints, request/response shapes, examples (`curl` / JavaScript), error codes, and workflows (upload + learn vs path-based).
+
 ## Setup
 
 Build bene binaries first (`build/build.sh` from the repo root). Install the server:
